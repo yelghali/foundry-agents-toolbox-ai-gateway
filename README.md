@@ -91,6 +91,21 @@ Official references, checked October 15, 2026:
 
 ## Architecture schemas
 
+### Recommended secure target architecture
+
+![Recommended secure Foundry agent architecture](docs/recommended-secure-architecture.svg)
+
+Editable source: [secure architecture Excalidraw diagram](docs/recommended-secure-architecture.excalidraw).
+
+The target design keeps four concerns separate:
+
+1. **Identity selection:** project MI for shared project access, agent identity for per-agent least privilege, or user OBO for per-user IQ authorization.
+2. **Authorization enforcement:** downstream Entra/RBAC plus separate Search services/KBs and separate model gateways per trust boundary.
+3. **Network isolation:** Private Link/existing VNet and deny-by-default public access where supported. This is the recommended target; the lab did not fully exercise every private-network path.
+4. **Observability:** one non-PII correlation ID across project telemetry, APIM and gateway metrics, with answer/body capture disabled. Telemetry is evidence, not an authorization control.
+
+### Measured A/B/C identity architecture
+
 ![A/B/C identity and APIM placement](docs/architecture.svg)
 
 Editable source: [Excalidraw diagram](docs/architecture.excalidraw). Regenerate both formats with `python docs\generate_diagrams.py`.

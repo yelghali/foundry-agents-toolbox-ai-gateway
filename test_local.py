@@ -200,17 +200,19 @@ class EvidenceTests(unittest.TestCase):
     def test_diagrams_have_valid_visible_elements(self):
         import xml.etree.ElementTree as ET
 
-        scene = json.loads((cm.ROOT / "docs" / "architecture.excalidraw").read_text())
-        self.assertEqual(scene["type"], "excalidraw")
-        ids = [element["id"] for element in scene["elements"]]
-        self.assertEqual(len(ids), len(set(ids)))
-        for element in scene["elements"]:
-            if element["type"] == "text":
-                self.assertGreater(element["width"], 0)
-                self.assertGreater(element["height"], 0)
-                self.assertEqual(element["strokeColor"], "#000000")
-        root = ET.parse(cm.ROOT / "docs" / "architecture.svg").getroot()
-        self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+        for name in ("architecture", "recommended-secure-architecture"):
+            with self.subTest(diagram=name):
+                scene = json.loads((cm.ROOT / "docs" / f"{name}.excalidraw").read_text())
+                self.assertEqual(scene["type"], "excalidraw")
+                ids = [element["id"] for element in scene["elements"]]
+                self.assertEqual(len(ids), len(set(ids)))
+                for element in scene["elements"]:
+                    if element["type"] == "text":
+                        self.assertGreater(element["width"], 0)
+                        self.assertGreater(element["height"], 0)
+                        self.assertEqual(element["strokeColor"], "#000000")
+                root = ET.parse(cm.ROOT / "docs" / f"{name}.svg").getroot()
+                self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
 
     def test_actual_backend_unsupported(self):
         error = {"code": "HostedAgentNotSupported", "backend_error": {
