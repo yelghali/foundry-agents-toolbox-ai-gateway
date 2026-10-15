@@ -1,0 +1,28 @@
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+resource_group_name = "rg-foundry-gateways"
+location            = "eastus2"
+foundry_name        = "replace-with-unique-foundry"
+
+# These are dedicated Microsoft.ApiManagement/aigateways resources, not StandardV2 services.
+gateways = {
+  "replace-gateway-team-a" = {}
+  "replace-gateway-team-b" = {}
+}
+
+projects = {
+  shared = "shared-project"
+}
+
+model_deployments = {
+  "gpt-4o-mini" = {
+    model_name    = "gpt-4o-mini"
+    model_version = "2024-07-18"
+    capacity      = 10
+  }
+}
+
+# Optional public-endpoint ABC foundation. Set an actual user/SP object ID before enabling.
+enable_abc_lab     = false
+deployer_object_id = null
+
+tags = { environment = "lab" }

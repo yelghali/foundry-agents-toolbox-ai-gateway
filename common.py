@@ -4,6 +4,7 @@ import base64
 import json
 import msvcrt
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -62,6 +63,20 @@ def save_config(config: dict, label: str) -> None:
 
 def credential(config: dict) -> AzureCliCredential:
     return AzureCliCredential(subscription=config["subscriptionId"], process_timeout=120)
+
+
+def standard_apim_id(config: dict) -> str:
+    resource_id = config.get("apimResourceId")
+    if config.get("apimSku") != "StandardV2" or not isinstance(resource_id, str) or not re.fullmatch(
+        r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.ApiManagement/service/[^/]+",
+        resource_id, flags=re.IGNORECASE,
+    ):
+        raise ValueError(
+            "This XML/MCP policy route requires a StandardV2 Microsoft.ApiManagement/service. "
+            "The Terraform AIGateway resource has a different runtime; use direct/toolbox routes "
+            "or explicitly supply an existing StandardV2 bridge."
+        )
+    return resource_id
 
 
 def claims(token: str) -> dict:

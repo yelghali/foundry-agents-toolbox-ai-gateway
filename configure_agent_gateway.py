@@ -14,7 +14,7 @@ def main() -> None:
     argparse.ArgumentParser(description=__doc__).parse_args()
     config = cm.load_config()
     cohort = next(item for item in config["cohorts"] if item["label"] == "b")
-    base = cohort["apimApiId"].split("/apis/")[0]
+    base = cm.standard_apim_id(config)
     name = "abc-b-search-data"
     api_id = base + "/apis/" + name
     cm.arm(config, "PUT", api_id, {"properties": {

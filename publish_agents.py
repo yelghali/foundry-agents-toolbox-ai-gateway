@@ -36,8 +36,22 @@ def wait(project, name, version):
     return version
 
 
+def platform_connections(config: dict, cohort: dict, suffix: str = "toolbox"):
+    platform_auth = "ProjectManagedIdentity" if cohort["label"] == "a" else "AgenticIdentityToken"
+    cohort["toolboxIngressConnectionId"] = cm.connection(
+        config, cohort, f"abc-{cohort['label']}-{suffix}-ingress", cohort["toolboxEndpoint"],
+        platform_auth, audience="https://ai.azure.com",
+    )
+    cohort["indexIngressConnectionId"] = cm.connection(
+        config, cohort, f"abc-{cohort['label']}-index-ingress", cohort["indexMcpEndpoint"],
+        platform_auth, audience="https://ai.azure.com",
+    )
+    if cohort["label"] == "a":
+        cm.grant(config, cohort["project"]["principalId"], cohort["project"]["id"], cm.FOUNDRY_USER_ROLE_ID)
+
+
 def relay(config: dict, cohort: dict, suffix: str = "toolbox"):
-    base = config["apimResourceId"]
+    base = cm.standard_apim_id(config)
     name = f"abc-{cohort['label']}-{suffix}"
     logger_id = f"{base}/loggers/{name}"
     cm.arm(config, "PUT", logger_id, {"properties": {
@@ -74,25 +88,16 @@ def relay(config: dict, cohort: dict, suffix: str = "toolbox"):
     service = cm.arm(config, "GET", base, version="2024-05-01")
     cohort["apimEndpoint"] = f"{service['properties']['gatewayUrl']}/{name}{parts.path}?api-version=v1"
     cohort["apimApiId"] = api_id
-    platform_auth = "ProjectManagedIdentity" if cohort["label"] == "a" else "AgenticIdentityToken"
-    cohort["toolboxIngressConnectionId"] = cm.connection(
-        config, cohort, f"abc-{cohort['label']}-{suffix}-ingress", cohort["toolboxEndpoint"],
-        platform_auth, audience="https://ai.azure.com",
-    )
+    platform_connections(config, cohort, suffix)
     cohort["apimIngressConnectionId"] = cm.connection(
         config, cohort, f"abc-{cohort['label']}-{suffix}-apim-ingress", cohort["apimEndpoint"],
-        platform_auth, audience="https://ai.azure.com",
+        "ProjectManagedIdentity" if cohort["label"] == "a" else "AgenticIdentityToken",
+        audience="https://ai.azure.com",
     )
-    cohort["indexIngressConnectionId"] = cm.connection(
-        config, cohort, f"abc-{cohort['label']}-index-ingress", cohort["indexMcpEndpoint"],
-        platform_auth, audience="https://ai.azure.com",
-    )
-    if cohort["label"] == "a":
-        cm.grant(config, cohort["project"]["principalId"], cohort["project"]["id"], cm.FOUNDRY_USER_ROLE_ID)
 
 
 def http_relay(config: dict, cohort: dict, suffix: str = "toolbox-http") -> None:
-    base = cohort["apimApiId"].split("/apis/")[0]
+    base = cm.standard_apim_id(config)
     name = f"abc-{cohort['label']}-{suffix}"
     api_id = f"{base}/apis/{name}"
     parts = urlsplit(cohort["toolboxEndpoint"])
@@ -154,8 +159,12 @@ def main():
     if args.only_agent and args.only_agent not in allowed_agents:
         parser.error("--only-agent must belong to the selected cohort.")
     project = AIProjectClient(endpoint=cohort["project"]["endpoint"], credential=cm.credential(config))
-    if not cohort.get("apimEndpoint"):
+    if any(route in ("apim", "apim-http", "apim-oauth") for route in args.routes):
+        cm.standard_apim_id(config)
+    if config.get("apimSku") == "StandardV2" and not cohort.get("apimEndpoint"):
         relay(config, cohort)
+    elif not cohort.get("toolboxIngressConnectionId"):
+        platform_connections(config, cohort)
     if "apim-http" in args.routes and not cohort.get("httpRelayEndpoint"):
         http_relay(config, cohort)
     cm.save_config(config, label)
@@ -205,11 +214,12 @@ def main():
                         project_connection_id=target["kbConnectionId"], require_approval="never"),
             ]
         else:
-            url, conn = {
-                "apim": (target["apimEndpoint"], target["apimIngressConnectionId"]),
-                "apim-oauth": (target["apimEndpoint"], target["apimIngressConnectionId"]),
-                "apim-http": (target.get("httpRelayEndpoint"), target.get("httpRelayConnectionId")),
-            }.get(route, (target["toolboxEndpoint"], target["toolboxIngressConnectionId"]))
+            if route in ("apim", "apim-oauth"):
+                url, conn = target["apimEndpoint"], target["apimIngressConnectionId"]
+            elif route == "apim-http":
+                url, conn = target["httpRelayEndpoint"], target["httpRelayConnectionId"]
+            else:
+                url, conn = target["toolboxEndpoint"], target["toolboxIngressConnectionId"]
             tools = [MCPTool(server_label="cohort_tools", server_url=url,
                              project_connection_id=conn, require_approval="never")]
         version = project.agents.create_version(

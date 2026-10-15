@@ -4,6 +4,17 @@ An isolated Microsoft Foundry lab demonstrating **project identity, agent identi
 
 **Only the Foundry-agent setup is included here.** No LiteLLM gateway, unrelated gateway comparisons, old slide decks, tenant configuration, credentials, consent URLs, or raw customer/test conversations are included.
 
+## Deployment options
+
+| Path | Gateway | Foundry / network | Guide |
+| --- | --- | --- | --- |
+| Original Bicep + Python lab | Existing Standard v2; optional new Standard v2 template | Existing shared Foundry, public A/B/C Search and telemetry | [Bicep deployment below](#deploy) |
+| **Modular Terraform: new gateways + shared Foundry** | **Dedicated `AIGateway` SKU**, zero/one/many | New shared account, optional projects/models and public ABC foundation | [Terraform guide](terraform/README.md) |
+| **Modular Terraform: private Foundry only** | None required | New account with public access disabled; PE in an **existing VNet/subnet**, created or reused private DNS | [Private Foundry example](terraform/examples/private-foundry.tfvars.example) |
+| Terraform: gateways + private Foundry | Dedicated `AIGateway` SKU | PE subnet plus a **separate existing delegated gateway backend subnet** | [Private composition example](terraform/examples/gateways-private-foundry.tfvars.example) |
+
+The Terraform version is **new-resource infrastructure**, validated with mocked plan tests, not a claim that the historical Standard v2 agent-policy flows already work on the dedicated tier. Modules can be called independently in your own stack. Foundry is PaaS: its **private-endpoint NIC**, not the account itself, is deployed into the subnet.
+
 ## TL;DR: results
 
 | Scenario | Result from the October 9, 2026 live lab |
@@ -20,16 +31,16 @@ An isolated Microsoft Foundry lab demonstrating **project identity, agent identi
 
 The results above are historical measured behavior, not a promise that a new subscription, region, API version or later service rollout behaves identically. This standalone extraction is checked with offline tests and Bicep compilation; publishing this repository does **not** redeploy or revalidate Azure resources.
 
-## Does this use the APIM "AI Gateway SKU"?
+## Which APIM / AI Gateway SKU does each version use?
 
-**No. The verified instance uses `StandardV2`, capacity 1.** This repository's optional APIM template also creates **Standard v2**, and the deployment wrapper checks that tier.
+**The original verified lab uses `StandardV2`, capacity 1. The new Terraform gateway module uses the dedicated `AIGateway` SKU.** The Bicep APIM template and original deployment wrapper intentionally remain Standard v2.
 
 Two different concepts are easy to confuse:
 
 | Term | Meaning | This lab |
 | --- | --- | --- |
 | **AI gateway capabilities in APIM** | Capabilities for model, agent, MCP and A2A traffic on API Management tiers; individual capabilities have tier-specific availability. | Uses MCP/HTTP APIs, Entra validation, XML policies, correlation and App Insights diagnostics on Standard v2. |
-| **Dedicated AI Gateway tier (preview)** | A separate AI-focused offering with its own resource/runtime model, runtime access keys and policy experience. | **Not deployed or validated.** Do not switch the SKU and assume these managed-user and policy flows remain equivalent. |
+| **Dedicated AI Gateway tier (preview)** | A separate AI-focused offering with its own resource/runtime model, runtime access keys and policy experience. | **Terraform provisions it using `Microsoft.ApiManagement/aigateways` / `AIGateway`.** Plan-tested, not Azure-applied/runtime-verified here. Do not assume the original policies or managed-user flows are equivalent. |
 
 There is no Foundry **model-inference gateway association** configured by this lab. Its APIM APIs govern agent/tool/data hops; it does not automatically route all model calls through APIM or enable model token metering/caching.
 
@@ -90,7 +101,7 @@ flowchart LR
 
 ## Resources and agents
 
-The foundation creates three new projects in an **existing Foundry account**, three isolated keyless Basic Search services, and three App Insights/workspace pairs. It reuses an existing **`gpt-4o-mini` deployment** and **Standard v2 APIM**.
+The original Bicep foundation creates three new projects in an **existing Foundry account**, three isolated keyless Basic Search services, and three App Insights/workspace pairs. It reuses an existing **`gpt-4o-mini` deployment** and **Standard v2 APIM**. Terraform can instead create the shared Foundry and optional model/projects, compose new dedicated AI gateways, and optionally add the same ABC foundation.
 
 | Project | Agents | Search data authorization |
 | --- | --- | --- |
@@ -100,7 +111,7 @@ The foundation creates three new projects in an **existing Foundry account**, th
 
 Each Search service contains `index-a/b/c`, local source `ks-a/b/c`, and `kb-a/b/c`. One source/index belongs to each KB. The signed-in provisioning user receives Search write permissions for seeding; that user is not a second-human deny test.
 
-**This is a public-endpoint preview lab, not a production network-isolation baseline.** No VNet/private endpoints are provisioned. Running it incurs Search, hosted-agent/model, APIM (if created), and telemetry charges.
+**The historical ABC agent lab is public-endpoint, not a production network-isolation baseline.** The new private Foundry Terraform mode provisions account PE/DNS in an existing VNet, but not the private dependencies/egress of a full hosted-agent lab. Running the relevant setup incurs Search, hosted-agent/model, gateway and telemetry charges.
 
 ## IaC and code map
 
@@ -117,6 +128,7 @@ Each Search service contains `index-a/b/c`, local source `ks-a/b/c`, and `kb-a/b
 | [configure_user_ingress.py](configure_user_ingress.py) | C's user-facing agent APIM API |
 | [policies/toolbox-proxy-policy.xml](policies/toolbox-proxy-policy.xml) | A's upstream Toolbox relay policy, with zero body logging |
 | [verify.ps1](verify.ps1), [test_routes.py](test_routes.py), [verify_showcase.py](verify_showcase.py) | Actual route/marker/denial tests, identity correlation and privacy scans |
+| [terraform/](terraform/) | Composable shared-Foundry, dedicated AI Gateway and optional ABC modules; private-only or gateway/shared-account examples; mocked plan tests |
 
 Raw Search uses a managed **OpenAPI-to-MCP adapter**, or B hosted REST tools, rather than an invented native index MCP URL. IQ uses the real KB MCP endpoint. For the tested native Azure AI Search tool, documented account-MI behavior is not assumed to be project/agent/user identity.
 
@@ -203,7 +215,9 @@ Live assertions check exact seeded markers, actual backend denial, version-pinne
 
 In Azure: open the corresponding **App Insights -> Logs** or **Log Analytics -> Logs**. In Foundry: select the project, then **Observability -> Traces**. Custom `AppEvents` need not appear as native Foundry trace trajectories. See [log queries and privacy details](docs/observability.md).
 
-Local `.config.json` contains telemetry settings and runtime state; `evidence/` can contain user queries and model outputs. Both are ignored. Keep them private. The repository deliberately publishes the historical **results summary**, not the original tenant's runtime files or conversations.
+Local `.config.json` contains telemetry settings and runtime state; `evidence/` can contain user queries and model outputs. Both are ignored. Terraform state, local tfvars and plans are also ignored and must be protected. The repository deliberately publishes the historical **results summary**, not the original tenant's runtime files or conversations.
+
+Terraform validation runs separately in [CI](.github/workflows/validate.yml): formatting, locked provider initialization, schema validation and mocked plan tests. It does **not** apply resources or claim private-network/runtime compatibility. See [Terraform deployment modes, prerequisites and explicit tier boundaries](terraform/README.md).
 
 ## Limitations and negative findings
 

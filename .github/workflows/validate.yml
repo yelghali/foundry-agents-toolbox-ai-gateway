@@ -9,6 +9,24 @@ permissions:
   contents: read
 
 jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.16.5'
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+      - name: Initialize locked providers without a backend
+        run: terraform init -backend=false -input=false -lockfile=readonly
+      - name: Validate modules
+        run: terraform validate
+      - name: Test modular plans with mocked providers
+        run: terraform test -no-color
   offline:
     runs-on: windows-latest
     steps:
@@ -35,6 +53,12 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
           }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "terraform\export_config.ps1"), [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
       - name: Compile Bicep without deploying resources
         shell: pwsh
         run: |

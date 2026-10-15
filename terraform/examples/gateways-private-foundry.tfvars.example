@@ -1,0 +1,29 @@
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+resource_group_name = "rg-private-foundry-gateways"
+location            = "eastus2"
+foundry_name        = "replace-with-unique-foundry"
+
+private_network = {
+  virtual_network_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/existing-network/providers/Microsoft.Network/virtualNetworks/existing-vnet"
+  private_endpoint_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/existing-network/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/private-endpoints"
+}
+
+# The delegated backend subnet is separate from the PE subnet. Both already exist.
+# This pinned gateway ARM API requires Microsoft.App/environments delegation.
+gateways = {
+  "replace-gateway-private" = {
+    backend_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/existing-network/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/ai-gateway-backend"
+  }
+}
+
+projects = { shared = "shared-project" }
+
+model_deployments = {
+  "gpt-4o-mini" = {
+    model_name    = "gpt-4o-mini"
+    model_version = "2024-07-18"
+    capacity      = 10
+  }
+}
+
+enable_abc_lab = false

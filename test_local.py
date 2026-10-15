@@ -95,6 +95,45 @@ class NoStoreTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_classic_policies_reject_dedicated_gateway(self):
+        with self.assertRaisesRegex(ValueError, "different runtime"):
+            cm.standard_apim_id({
+                "apimSku": "AIGateway",
+                "apimResourceId": "/subscriptions/test/resourceGroups/test/providers/Microsoft.ApiManagement/aigateways/test",
+            })
+        resource_id = "/subscriptions/test/resourceGroups/test/providers/Microsoft.ApiManagement/service/test"
+        self.assertEqual(cm.standard_apim_id({"apimSku": "StandardV2", "apimResourceId": resource_id}), resource_id)
+
+    def test_toolbox_prompt_publication_without_classic_apim(self):
+        from types import SimpleNamespace
+        import publish_agents
+
+        cohort = {
+            "label": "b", "identityMode": "agent",
+            "project": {"id": "/projects/b", "endpoint": "https://example.services.ai.azure.com/api/projects/b"},
+            "searchId": "/search/b", "toolboxEndpoint": "https://example.services.ai.azure.com/toolbox/mcp",
+            "indexMcpEndpoint": "https://example.services.ai.azure.com/index/mcp",
+        }
+        config = {"cohorts": [cohort], "modelDeploymentName": "lab-model", "apimResourceId": None, "apimSku": None}
+        project = Mock()
+        project.agents.create_version.return_value = SimpleNamespace(
+            version="1", instance_identity=SimpleNamespace(principal_id="agent-b"),
+        )
+        with patch.object(cm, "load_config", return_value=config), patch.object(
+            cm, "credential", return_value=Mock(),
+        ), patch.object(cm, "connection", return_value="/connections/platform"), patch.object(
+            cm, "grant",
+        ), patch.object(cm, "save_config"), patch.object(
+            publish_agents, "AIProjectClient", return_value=project,
+        ), patch.object(publish_agents, "relay") as relay, patch(
+            "sys.argv", ["publish_agents.py", "--cohort", "b", "--routes", "toolbox", "--only-agent", "prompt-b"],
+        ):
+            publish_agents.main()
+        relay.assert_not_called()
+        definition = project.agents.create_version.call_args.kwargs["definition"]
+        self.assertEqual(definition.tools[0].server_url, cohort["toolboxEndpoint"])
+        self.assertEqual(cohort["agents"]["prompt-b"]["versions"]["toolbox"], "1")
+
     def test_search_schemas_are_locally_complete(self):
         index = index_body("index-a")
         source = knowledge_source_body("ks-a", "index-a")

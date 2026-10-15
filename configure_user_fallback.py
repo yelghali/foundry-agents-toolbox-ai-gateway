@@ -18,6 +18,7 @@ from publish_agents import http_relay
 def main() -> None:
     argparse.ArgumentParser(description=__doc__).parse_args()
     config = cm.load_config()
+    cm.standard_apim_id(config)
     cohort = next(item for item in config["cohorts"] if item["label"] == "c")
     azd = shutil.which("azd")
     if not azd:

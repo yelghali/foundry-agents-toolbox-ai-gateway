@@ -13,5 +13,13 @@ infra.json
 projects.json
 apim.json
 evidence/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+crash.log
 .oauth-consent.json
 .oauth-consent.url
