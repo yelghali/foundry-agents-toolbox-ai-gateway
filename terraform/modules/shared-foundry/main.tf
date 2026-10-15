@@ -52,6 +52,7 @@ resource "azapi_resource" "project" {
   identity { type = "SystemAssigned" }
   body                   = { properties = {} }
   response_export_values = ["identity.principalId"]
+  depends_on             = [azapi_resource.model]
 }
 
 resource "azapi_resource" "model" {

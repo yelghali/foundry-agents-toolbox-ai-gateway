@@ -52,8 +52,17 @@ try {
     $resource = Invoke-CheckedJson -FailureMessage "Could not read the AI gateway ARM resource." -Command {
         az rest --method get --uri "https://management.azure.com$($gateway.id)?api-version=2026-09-01-preview" --output json
     }
-    if ($resource.type -ne "Microsoft.ApiManagement/aigateways" -or $resource.sku.name -ne "AIGateway") {
+    $reportedSku = if ($null -ne $resource.PSObject.Properties["sku"]) {
+        $resource.sku.name
+    }
+    else {
+        $gateway.sku
+    }
+    if ($resource.type -ne "Microsoft.ApiManagement/aigateways" -or $reportedSku -ne "AIGateway") {
         throw "Resource '$GatewayName' is not the dedicated Microsoft.ApiManagement/aigateways AIGateway tier."
+    }
+    if ($null -eq $resource.PSObject.Properties["sku"]) {
+        Write-Warning "The preview ARM GET response did not echo sku; verified AIGateway from the Terraform-managed resource output."
     }
     if ($resource.properties.provisioningState -ne "Succeeded") {
         throw "Gateway provisioning state is '$($resource.properties.provisioningState)', not 'Succeeded'."
@@ -70,10 +79,12 @@ try {
     }
 
     Write-Host "Infrastructure verified: $GatewayName is ready and its system identity has Foundry User on the shared Foundry resource."
-    Write-Host "Portal steps still required by the preview service:"
+    Write-Host "If not already completed, the preview portal steps are:"
     Write-Host "  1. Models -> Add models -> Import from Foundry -> Managed identity."
-    Write-Host "  2. Optionally publish MCP servers under MCP servers."
-    Write-Host "  3. Keys -> create a runtime access key and store it in an approved secret store."
+    Write-Host "  2. Assign an exact caller-facing alias to every imported model."
+    Write-Host "  3. Optionally publish MCP servers under MCP servers."
+    Write-Host "  4. Keys -> create a runtime access key and store it in an approved secret store."
+    Write-Host "  5. Monitoring -> configure telemetry before sending traffic that must be measured."
     Write-Warning "Every preview runtime key can call every published model and tool in this gateway; use separate gateways for authorization isolation."
 
     if (-not $TestRuntime) { return }
@@ -84,7 +95,10 @@ try {
         throw "Use -ModelName, -ToolServerName, or both with -TestRuntime."
     }
 
-    $headers = @{ "api-key" = $env:AI_GATEWAY_RUNTIME_ACCESS_KEY }
+    $headers = @{
+        "api-key"         = $env:AI_GATEWAY_RUNTIME_ACCESS_KEY
+        "x-correlation-id" = "gateway-verifier-$([guid]::NewGuid())"
+    }
     if (-not [string]::IsNullOrWhiteSpace($ModelName)) {
         $modelBody = @{
             model      = $ModelName
@@ -97,7 +111,7 @@ try {
         if (@($modelResponse.choices).Count -eq 0) {
             throw "The model endpoint returned no choices."
         }
-        Write-Host "Runtime model smoke test passed for '$ModelName'; response content was not printed."
+        Write-Host "Runtime model smoke test passed for alias '$ModelName'; response content was not printed."
     }
 
     if (-not [string]::IsNullOrWhiteSpace($ToolServerName)) {

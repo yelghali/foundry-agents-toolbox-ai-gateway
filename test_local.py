@@ -167,6 +167,36 @@ class EvidenceTests(unittest.TestCase):
             self.assertNotIn("tracing-deployment.json", source)
         self.assertTrue((cm.ROOT / "policies" / "toolbox-proxy-policy.xml").is_file())
 
+    def test_admin_model_connection_is_secret_safe_and_gateway_neutral(self):
+        source = (cm.ROOT / "admin-model-connection.bicep").read_text()
+        key_parameter = source.index("param gatewayRuntimeKey string")
+        self.assertIn("@secure()", source[max(0, key_parameter - 250):key_parameter])
+        self.assertIn("'ModelGateway'", source)
+        self.assertIn("'ApiManagement'", source)
+        self.assertIn("category: connectionCategory", source)
+        self.assertIn("target: gatewayModelsBaseUrl", source)
+        self.assertIn("authHeaderFormat: '{api_key}'", source)
+        self.assertIn("output modelReference string = '${connection.name}/${modelName}'", source)
+        outputs = [line for line in source.splitlines() if line.startswith("output ")]
+        self.assertFalse(any("gatewayRuntimeKey" in line for line in outputs))
+
+    def test_admin_model_smoke_uses_no_store_and_redacts_answer(self):
+        source = (cm.ROOT / "smoke_admin_model_agent.py").read_text()
+        tree = ast.parse(source)
+        no_store_calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "create"
+            and any(keyword.arg == "store" and isinstance(keyword.value, ast.Constant)
+                    and keyword.value.value is False for keyword in node.keywords)
+        ]
+        self.assertEqual(len(no_store_calls), 1)
+        self.assertIn("aigw-admin-models/gpt-4o-mini", source)
+        self.assertIn('"x-correlation-id"', source)
+        self.assertIn("Response content was validated but not printed.", source)
+        self.assertNotIn("print(response.output_text", source)
+
     def test_diagrams_have_valid_visible_elements(self):
         import xml.etree.ElementTree as ET
 

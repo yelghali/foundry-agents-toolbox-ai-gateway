@@ -13,11 +13,11 @@ An isolated Microsoft Foundry lab demonstrating **project identity, agent identi
 | **Modular Terraform: private Foundry only** | None required | New account with public access disabled; PE in an **existing VNet/subnet**, created or reused private DNS | [Private Foundry example](terraform/examples/private-foundry.tfvars.example) |
 | Terraform: gateways + private Foundry | Dedicated `AIGateway` SKU | PE subnet plus a **separate existing delegated gateway backend subnet** | [Private composition example](terraform/examples/gateways-private-foundry.tfvars.example) |
 
-The Terraform version is **new-resource infrastructure**, validated with mocked plan tests, not a claim that the historical Standard v2 agent-policy flows already work on the dedicated tier. Modules can be called independently in your own stack. Foundry is PaaS: its **private-endpoint NIC**, not the account itself, is deployed into the subnet.
+The Terraform version is **new-resource infrastructure**. Mocked plans cover every composition, and a minimal public shared-Foundry + dedicated-gateway composition was also applied and exercised on October 15, 2026. That live proof covers the BYOM model path below; it does not claim the historical Standard v2 agent-policy flows or private-network variants already work on the dedicated tier. Modules can be called independently in your own stack. Foundry is PaaS: its **private-endpoint NIC**, not the account itself, is deployed into the subnet.
 
 ## TL;DR: results
 
-| Scenario | Result from the October 9, 2026 live lab |
+| Scenario | Measured result |
 | --- | --- |
 | **A: project identity** | Prompt and hosted agents retrieve from Search A / IQ KB A using project-A credentials. APIM before Toolbox works. |
 | **B: agent identity** | Prompt and hosted agents retrieve with their distinct agent identities. **Toolbox -> APIM -> Search/IQ** works; APIM JWT claims match the respective agent. |
@@ -26,8 +26,9 @@ The Terraform version is **new-resource infrastructure**, validated with mocked 
 | **Orchestrator in A** | Calling Prompt A succeeds. The tested Hosted A A2A target explicitly returns `HostedAgentNotSupported`. |
 | **Confidential agent in B** | Question logged; answer returned to caller but absent from six telemetry tables in the corrected test window. `store:false` is enforced even when the caller asks for `store:true`. |
 | **Telemetry isolation** | Three App Insights / Log Analytics pairs; no foreign-project custom events in the tested windows. |
+| **Dedicated AI Gateway BYOM** | On October 15, a prompt agent using `aigw-admin-models/gpt-4o-mini` completed through an Admin-connected `ModelGateway` connection and dedicated `AIGateway`. Gateway monitoring attributed 63 tokens (57 input, 6 output) to the connection's runtime-key identity. |
 
-**Boundaries:** separate Search **services**, not index isolation inside one shared KB; no two-human or document-ACL proof; C raw Search managed-user calls remain broker-rejected. The generic OAuth fallback is **optional and consent-gated**, not required by the working C IQ path. No claim of zero provider/internal retention.
+**Boundaries:** separate Search **services**, not index isolation inside one shared KB; no two-human or document-ACL proof; C raw Search managed-user calls remain broker-rejected. The generic OAuth fallback is **optional and consent-gated**, not required by the working C IQ path. The BYOM gateway sees the connection key identity, not the initiating human user. No claim of zero provider/internal retention.
 
 The results above are historical measured behavior, not a promise that a new subscription, region, API version or later service rollout behaves identically. This standalone extraction is checked with offline tests and Bicep compilation; publishing this repository does **not** redeploy or revalidate Azure resources.
 
@@ -40,11 +41,36 @@ Two different concepts are easy to confuse:
 | Term | Meaning | This lab |
 | --- | --- | --- |
 | **AI gateway capabilities in APIM** | Capabilities for model, agent, MCP and A2A traffic on API Management tiers; individual capabilities have tier-specific availability. | Uses MCP/HTTP APIs, Entra validation, XML policies, correlation and App Insights diagnostics on Standard v2. |
-| **Dedicated AI Gateway tier (preview)** | A separate AI-focused offering with its own resource/runtime model, runtime access keys and policy experience. | **Terraform provisions it using `Microsoft.ApiManagement/aigateways` / `AIGateway`.** Plan-tested, not Azure-applied/runtime-verified here. Do not assume the original policies or managed-user flows are equivalent. |
+| **Dedicated AI Gateway tier (preview)** | A separate AI-focused offering with its own resource/runtime model, runtime access keys and policy experience. | **Terraform provisions it using `Microsoft.ApiManagement/aigateways` / `AIGateway`.** A public BYOM prompt-agent path is live-verified; the original policies, OBO flows and private modes are not assumed equivalent. |
 
-The Terraform stack gives each new gateway identity the documented **Foundry User** backend role. Model import, MCP publication and runtime-key creation remain explicit portal steps because the published ARM contract exposes the gateway resource but not those asset workflows. During preview, every runtime key can call **all** published models and tools in its gateway; this is not a per-user or per-asset authorization boundary. Use separate gateways when assets need authorization isolation.
+The Terraform stack gives each new gateway identity the documented **Foundry User** backend role. Model import, alias assignment, MCP publication, runtime-key creation and telemetry destination setup remain explicit portal steps because the published ARM contract exposes the gateway resource but not those asset workflows. The repository then creates the Foundry Admin-connected model with [admin-model-connection.bicep](admin-model-connection.bicep). During preview, every runtime key can call **all** published models and tools in its gateway; this is not a per-user or per-asset authorization boundary. Use separate gateways when assets need authorization isolation.
 
-There is no Foundry **model-inference gateway association** until you complete that model import. The historical Standard v2 APIs govern agent/tool/data hops; they do not automatically route all model calls through APIM or enable model token metering/caching.
+There is no Foundry **model-inference gateway association** until you import a model and create the Admin-connected model. The historical Standard v2 APIs govern agent/tool/data hops; they do not automatically route all model calls through APIM or enable model token metering/caching.
+
+### Live BYOM / Admin-connected model path
+
+This uses Foundry Agent Service **Bring Your Own Model**. It does **not** enable Foundry's separate AI Gateway integration preview.
+
+```mermaid
+flowchart LR
+    U["Application / user"] --> A["Foundry prompt agent"]
+    A --> C["Admin-connected model<br/>ModelGateway + API key"]
+    C --> G["Dedicated AIGateway<br/>exact alias: gpt-4o-mini"]
+    G -- "system MI + Foundry User" --> M["Foundry gpt-4o-mini deployment"]
+    G -- "OpenTelemetry token metric" --> I["Gateway Application Insights"]
+    A -. "custom user-aware telemetry" .-> P["Project Application Insights"]
+```
+
+- Agent model reference: `<connection-name>/<gateway-model-alias>`, measured as `aigw-admin-models/gpt-4o-mini`.
+- Gateway base URL: `https://<gateway>/default/models/openai/v1`.
+- Gateway -> Foundry backend authentication: gateway system-managed identity with **Foundry User**.
+- Agent Service -> gateway authentication: a dedicated gateway runtime key stored in the Foundry connection. The exposed test key was rotated before the passing test and is not in source or Terraform state.
+- The dedicated gateway routes by **exact model alias**. Calling the backend deployment name before assigning the matching alias returned `model_not_found`.
+- Configure the gateway telemetry destination **before** test traffic. In this preview, Application Insights received token metrics and caller-key identity; exported model logs/traces are not yet available, so the trace-backed call counter can remain zero.
+- Custom agent/app telemetry is still required for initiating-user identity. Correlate it with a non-PII correlation ID; the shared runtime key does not propagate the human user's `oid`.
+- The service returned `isSharedToAll: false` after a deployment requesting `true`. Same-project agent use passed; deploy one connection per project until cross-project sharing is revalidated.
+
+The same Bicep template accepts `connectionCategory=ApiManagement` for an existing Standard v2 APIM model endpoint. That branch is provided but was not part of this dedicated-tier live test.
 
 Official references, checked October 15, 2026:
 [APIM AI gateway capabilities](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities) and
@@ -130,6 +156,7 @@ Each Search service contains `index-a/b/c`, local source `ks-a/b/c`, and `kb-a/b
 | [configure_user_ingress.py](configure_user_ingress.py) | C's user-facing agent APIM API |
 | [policies/toolbox-proxy-policy.xml](policies/toolbox-proxy-policy.xml) | A's upstream Toolbox relay policy, with zero body logging |
 | [verify.ps1](verify.ps1), [test_routes.py](test_routes.py), [verify_showcase.py](verify_showcase.py) | Actual route/marker/denial tests, identity correlation and privacy scans |
+| [admin-model-connection.bicep](admin-model-connection.bicep), [smoke_admin_model_agent.py](smoke_admin_model_agent.py) | `ModelGateway` / `ApiManagement` Admin-connected model IaC and no-store prompt-agent smoke test |
 | [terraform/](terraform/) | Composable shared-Foundry, dedicated AI Gateway and optional ABC modules; private-only or gateway/shared-account examples; mocked plan tests |
 
 Raw Search uses a managed **OpenAPI-to-MCP adapter**, or B hosted REST tools, rather than an invented native index MCP URL. IQ uses the real KB MCP endpoint. For the tested native Azure AI Search tool, documented account-MI behavior is not assumed to be project/agent/user identity.
@@ -203,9 +230,15 @@ Default agent endpoints are pinned to A `apim`, B `data-gateway`, C `toolbox` on
 python -m unittest test_local -v
 az bicep build --file .\infra.bicep
 az bicep build --file .\apim.bicep
+az bicep build --file .\admin-model-connection.bicep
 
 # Live, authenticated, billable model/tool calls:
 .\verify.ps1
+
+# Live BYOM prompt-agent call after gateway onboarding and connection deployment:
+python .\smoke_admin_model_agent.py `
+  --subscription-id "<subscription-id>" `
+  --project-endpoint "https://<account>.services.ai.azure.com/api/projects/<project>"
 
 # Rerun after Azure Monitor ingestion delay:
 python .\verify_showcase.py --privacy --store-request --audits --gateway --user-ingress
@@ -229,6 +262,8 @@ Terraform validation runs separately in [CI](.github/workflows/validate.yml): fo
 - **APIM in the wrong hop:** B APIM-before-Toolbox lost required agent context; C APIM-before-Toolbox managed OBO failed. The working placements above are deliberate.
 - **APIM visibility:** actual request URL/path/principal can be logged at the hop it sees. APIM before a KB does **not** observe that KB's internal local-index subqueries.
 - **Dedicated AI Gateway preview authorization:** runtime access keys are gateway-scoped and each key can call every published model and tool. Per-asset key scoping and the historical managed-user OBO behavior are not implemented or claimed.
+- **Dedicated gateway observability:** gateway Application Insights currently exports model token metrics, including key identity and model/operation attributes. It does not make a shared key user-aware, and preview model logs/traces are not yet exported.
+- **Admin-connected model sharing:** the live service normalized `isSharedToAll` to `false`; only same-project use was validated.
 - **One human:** no two-human allow/deny proof. C's successful tests also checked the absence of project/agent Search data grants.
 - **Confidentiality:** container flags alone initially leaked model content through Foundry server traces. The corrected confidential agent uses the direct model endpoint, question-only audit and enforced `store:false`. Older test traces remain. This is not a zero-provider-retention guarantee.
 - **Hosted A2A:** the measured target returned `HostedAgentNotSupported`; the orchestrator preserves that actual platform result. Prompt-peer invocation passed.
@@ -246,3 +281,4 @@ Terraform validation runs separately in [CI](.github/workflows/validate.yml): fo
 - [Search document permission enforcement](https://learn.microsoft.com/azure/search/search-query-access-control-rbac-enforcement)
 - [Manage dedicated AI Gateway models and tools](https://learn.microsoft.com/azure/api-management/ai-gateway-manage-models-tools)
 - [Govern dedicated AI Gateway assets](https://learn.microsoft.com/azure/api-management/ai-gateway-govern-secure-assets)
+- [Bring your own model to Foundry Agent Service](https://learn.microsoft.com/azure/foundry/agents/how-to/ai-gateway)

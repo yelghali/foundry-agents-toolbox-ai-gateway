@@ -10,6 +10,9 @@ output "endpoint" {
 output "models_endpoint" {
   value = "https://${azapi_resource.gateway.output.properties.frontend.defaultHostname}/default/models"
 }
+output "models_openai_base_url" {
+  value = "https://${azapi_resource.gateway.output.properties.frontend.defaultHostname}/default/models/openai/v1"
+}
 output "toolservers_endpoint" {
   value = "https://${azapi_resource.gateway.output.properties.frontend.defaultHostname}/default/toolservers"
 }

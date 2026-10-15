@@ -102,7 +102,7 @@ For new gateways/shared Foundry, copy the corresponding example instead. **Nothi
 
 The PE is created in the **VNet's location**, which may differ from the Foundry account's region. The private setup disables public access from account creation, rather than opening it temporarily for provisioning.
 
-### Finish dedicated gateway onboarding
+### Finish dedicated gateway onboarding and BYOM connection
 
 The public `Microsoft.ApiManagement/aigateways@2026-09-01-preview` ARM contract creates and reads the gateway itself. Microsoft currently documents model import, MCP publication and runtime-key creation as AI Gateway portal workflows, so Terraform deliberately does not replay private portal calls.
 
@@ -110,17 +110,20 @@ After apply:
 
 1. Run the infrastructure verifier. It checks the actual resource type/SKU, provisioning state and the gateway identity's **Foundry User** assignment.
 2. In the AI Gateway portal, use **Models -> Add models -> Import from Foundry -> Managed identity**.
-3. Optionally publish a tool server under **MCP servers**.
-4. Create a runtime access key under **Keys** and store it in an approved secret store.
+3. Give the imported model an exact, stable alias. The dedicated tier routes the request body's `model` by alias, not by backend deployment name.
+4. Optionally publish a tool server under **MCP servers**.
+5. Create a dedicated runtime access key under **Keys** and store it in an approved secret store.
+6. Under **Monitoring**, connect Application Insights or another OTLP destination **before** sending traffic that must be measured.
+7. Deploy [admin-model-connection.bicep](../admin-model-connection.bicep) to the Foundry project. The prompt-agent model name is `<connection-name>/<gateway-model-alias>`.
 
 ```powershell
 terraform output -json gateway_onboarding
 .\verify_ai_gateway.ps1 -GatewayName "your-team-ai-gateway"
 ```
 
-The output is nonsecret and includes endpoint prefixes and the manual handoff. It never includes runtime keys.
+The output is nonsecret and includes the OpenAI-compatible base URL plus the manual handoff. It never includes runtime keys.
 
-For an explicit, billable runtime smoke test after the portal steps, place the key only in the current process:
+For an explicit, billable direct-gateway smoke test after the portal steps, place the key only in the current process. `-ModelName` must be the exact gateway alias:
 
 ```powershell
 $env:AI_GATEWAY_RUNTIME_ACCESS_KEY = "<secret-from-your-approved-store>"
@@ -131,7 +134,48 @@ Remove-Item Env:\AI_GATEWAY_RUNTIME_ACCESS_KEY
 
 The verifier does not print model response content or the key. The runtime test is opt-in because it sends live traffic.
 
+From the repository root, create the Admin-connected model. The secure Bicep parameter is stored as a Foundry connection credential and is not returned as deployment output:
+
+```powershell
+$env:AI_GATEWAY_RUNTIME_ACCESS_KEY = "<secret-from-your-approved-store>"
+az deployment group create `
+  --resource-group "<foundry-resource-group>" `
+  --template-file .\admin-model-connection.bicep `
+  --parameters `
+    projectResourceId="<full-foundry-project-resource-id>" `
+    gatewayModelsBaseUrl="https://<gateway-host>/default/models/openai/v1" `
+    gatewayRuntimeKey="$env:AI_GATEWAY_RUNTIME_ACCESS_KEY" `
+    connectionName="aigw-admin-models" `
+    modelName="gpt-4o-mini" `
+    modelVersion="2024-07-18" `
+    connectionCategory="ModelGateway"
+Remove-Item Env:\AI_GATEWAY_RUNTIME_ACCESS_KEY
+```
+
+Then exercise the Agent Service route without printing model content:
+
+```powershell
+python .\smoke_admin_model_agent.py `
+  --subscription-id "<subscription-id>" `
+  --project-endpoint "https://<account>.services.ai.azure.com/api/projects/<project>"
+```
+
+For a classic Standard v2 APIM model API, use `connectionCategory="ApiManagement"` and the matching API base URL. Set `deploymentInPath=true` only when the APIM route contains `/deployments/{deploymentName}`. This branch is not a claim that the dedicated tier and Standard v2 policy surfaces are equivalent.
+
 > **Preview authorization boundary:** each runtime access key is gateway-scoped and can call **all published models and tools** in that gateway. Per-asset key scoping is unavailable. Separate gateways, not separate keys in one gateway, are the enforceable asset-isolation boundary for this tier today.
+
+### Measured public apply findings
+
+A minimal public composition with one Foundry account, project, model deployment and dedicated gateway was applied and left running for testing on October 15, 2026:
+
+- Terraform converged without resource changes after the live fixes. No destroy was run.
+- The gateway's create operation succeeded in Azure, but the preview RP returned an operation-status URL using an API version unsupported by that status endpoint. The resulting false Terraform taint was cleared only after the gateway ARM resource reported `Succeeded`; the gateway was not replaced.
+- Concurrent project and model child operations returned HTTP 409. The shared-Foundry module now serializes project creation after model deployments.
+- The gateway GET response omitted `sku`; the verifier cross-checks the Terraform-managed `AIGateway` output while still requiring the live resource type and `Succeeded` state.
+- A request using the backend deployment name failed with `model_not_found`; assigning the exact `gpt-4o-mini` gateway alias fixed routing.
+- Direct gateway inference and a prompt agent using `aigw-admin-models/gpt-4o-mini` both passed. Response content was validated but not printed.
+- After telemetry was configured, gateway monitoring recorded 63 tokens for the model call (57 input, 6 output) and attributed them to the dedicated runtime-key identity. Current preview model export is token-metric-only, so trace-backed call counts can remain zero.
+- The connection deployment requested `isSharedToAll=true`, but the service GET returned `false`. Same-project use passed; deploy the connection per project until cross-project sharing is revalidated.
 
 ### Existing private DNS
 
@@ -202,7 +246,7 @@ terraform validate
 terraform test -no-color
 ```
 
-Tests use **mocked providers and plan assertions**: no credentials, Azure API calls, resources or teardown in Azure. They cover the real AIGateway type/SKU, multiple gateways, public/private Foundry-only, reuse of DNS, same-VNet constraints, wrong delegation/region, missing ABC model, and absence of B/C project data grants. Validation is not a successful Azure deployment or runtime OBO test.
+Tests use **mocked providers and plan assertions**: no credentials, Azure API calls, resources or teardown in Azure. They cover the real AIGateway type/SKU, multiple gateways, BYOM handoff URL, public/private Foundry-only, reuse of DNS, same-VNet constraints, wrong delegation/region, missing ABC model, and absence of B/C project data grants. The mocked suite alone is not a successful Azure deployment or runtime OBO test; the measured live proof above is intentionally narrower than every supported composition.
 
 After a real private apply, from a VNet-connected host resolve all three account hostnames to private IPs, test Entra-authenticated data-plane access, and confirm an external client cannot use the account. For a gateway, run `verify_ai_gateway.ps1`, complete MI model import, and validate private backend reachability before routing applications through it.
 
@@ -213,5 +257,6 @@ After a real private apply, from a VNet-connected host resolve all three account
 - [AI Gateway overview](https://learn.microsoft.com/azure/api-management/ai-gateway-overview) and [networking](https://learn.microsoft.com/azure/api-management/ai-gateway-configure-private-networking)
 - [Manage AI Gateway models and tools](https://learn.microsoft.com/azure/api-management/ai-gateway-manage-models-tools)
 - [Govern AI Gateway assets, runtime keys and managed identity](https://learn.microsoft.com/azure/api-management/ai-gateway-govern-secure-assets)
+- [Bring your own model to Foundry Agent Service](https://learn.microsoft.com/azure/foundry/agents/how-to/ai-gateway)
 - [Foundry account ARM schema](https://learn.microsoft.com/azure/templates/microsoft.cognitiveservices/2025-06-01/accounts)
 - [Foundry private networking](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link) and [private DNS zones](https://learn.microsoft.com/azure/private-link/private-endpoint-dns)

@@ -41,9 +41,10 @@ run "dedicated_ai_gateway_not_classic_apim" {
     error_message = "Public gateway mode must not assume a VNet or subnet."
   }
   assert {
-    condition = endswith(output.models_endpoint, "/default/models") && endswith(
-      output.toolservers_endpoint,
-      "/default/toolservers"
+    condition = (
+      endswith(output.models_endpoint, "/default/models") &&
+      endswith(output.models_openai_base_url, "/default/models/openai/v1") &&
+      endswith(output.toolservers_endpoint, "/default/toolservers")
     )
     error_message = "The module must expose the documented model and tool-server endpoint prefixes."
   }

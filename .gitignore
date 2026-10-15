@@ -18,6 +18,7 @@ evidence/
 *.tfstate.*
 *.tfplan
 terraform.tfvars
+*.deployment.tfvars
 *.auto.tfvars
 *.auto.tfvars.json
 crash.log

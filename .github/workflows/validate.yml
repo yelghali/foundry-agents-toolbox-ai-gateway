@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path build -Force | Out-Null
-          foreach ($file in @("infra", "projects", "apim")) {
+          foreach ($file in @("infra", "projects", "apim", "admin-model-connection")) {
             az bicep build --file "$file.bicep" --outfile "build\$file.json"
             if ($LASTEXITCODE -ne 0) { throw "Bicep compilation failed: $file" }
           }

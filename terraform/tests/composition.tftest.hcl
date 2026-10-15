@@ -38,9 +38,11 @@ run "multiple_gateways_one_shared_foundry" {
     condition = alltrue([
       for handoff in values(output.gateway_onboarding) :
       handoff.backend_identity.required_role == "Foundry User" &&
-      startswith(handoff.runtime_key_scope, "All published models and tools")
+      startswith(handoff.runtime_key_scope, "All published models and tools") &&
+      handoff.admin_connected_model.category == "ModelGateway" &&
+      handoff.admin_connected_model.agent_model_format == "<connection-name>/<gateway-model-alias>"
     ])
-    error_message = "The onboarding handoff must preserve the documented backend role and preview-wide runtime-key boundary."
+    error_message = "The onboarding handoff must preserve the backend role, BYOM base URL and preview-wide runtime-key boundary."
   }
   assert {
     condition     = length(module.abc) == 0
