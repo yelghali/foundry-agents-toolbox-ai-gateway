@@ -1,0 +1,52 @@
+name: Validate standalone lab
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run focused tests
+        run: python -m unittest test_local -v
+      - name: Check Python and PowerShell syntax
+        shell: pwsh
+        run: |
+          python -m compileall -q .
+          if ($LASTEXITCODE -ne 0) { throw "Python syntax failed." }
+          foreach ($file in Get-ChildItem *.ps1) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+      - name: Compile Bicep without deploying resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          foreach ($file in @("infra", "projects", "apim")) {
+            az bicep build --file "$file.bicep" --outfile "build\$file.json"
+            if ($LASTEXITCODE -ne 0) { throw "Bicep compilation failed: $file" }
+          }
+      - name: Check generated diagrams are current
+        shell: pwsh
+        run: |
+          python docs\generate_diagrams.py
+          if ($LASTEXITCODE -ne 0) { throw "Diagram generation failed." }
+          git --no-pager diff --exit-code -- docs
+          if ($LASTEXITCODE -ne 0) { throw "Regenerate and commit the diagrams." }

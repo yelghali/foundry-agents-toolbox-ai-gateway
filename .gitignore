@@ -1,0 +1,17 @@
+.config.json
+.config.lock
+.config.next.json
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.*
+!.env.example
+build/
+*.zip
+infra.json
+projects.json
+apim.json
+evidence/
+.oauth-consent.json
+.oauth-consent.url

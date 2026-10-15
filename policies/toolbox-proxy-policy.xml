@@ -1,0 +1,60 @@
+<policies>
+  <inbound>
+    <validate-azure-ad-token tenant-id="{tenant-id}" header-name="Authorization" output-token-variable-name="toolbox-caller">
+      <audiences><audience>https://ai.azure.com</audience><audience>https://ai.azure.com/</audience></audiences>
+    </validate-azure-ad-token>
+    <set-query-parameter name="api-version" exists-action="override"><value>v1</value></set-query-parameter>
+    <set-header name="Host" exists-action="override"><value>{toolbox-host}</value></set-header>
+    <set-header name="Authorization" exists-action="override"><value>@(context.Request.Headers.GetValueOrDefault("Authorization"))</value></set-header>
+    <choose>
+      <when condition="@(context.Request.Headers.ContainsKey(&quot;x-agent-foundry-call-id&quot;))">
+        <set-header name="x-agent-foundry-call-id" exists-action="override"><value>@(context.Request.Headers.GetValueOrDefault("x-agent-foundry-call-id"))</value></set-header>
+      </when>
+    </choose>
+    <set-variable name="caller-context-present" value="@(context.Request.Headers.ContainsKey(&quot;x-agent-foundry-call-id&quot;))" />
+    <set-variable name="caller-context-hash" value="@{
+      var callId = context.Request.Headers.GetValueOrDefault(&quot;x-agent-foundry-call-id&quot;, &quot;&quot;);
+      if (String.IsNullOrEmpty(callId)) { return &quot;not_present&quot;; }
+      return Convert.ToBase64String(System.Security.Cryptography.SHA256.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(callId)));
+    }" />
+    <set-variable name="mcp-method" value="@{
+      if (context.Request.Method != &quot;POST&quot;) { return &quot;not_applicable&quot;; }
+      var body = context.Request.Body.As&lt;JObject&gt;(preserveContent: true);
+      return body.Value&lt;string&gt;(&quot;method&quot;) ?? &quot;not_present&quot;;
+    }" />
+    <set-variable name="mcp-tool-name" value="@{
+      if (context.Request.Method != &quot;POST&quot;) { return &quot;not_applicable&quot;; }
+      var body = context.Request.Body.As&lt;JObject&gt;(preserveContent: true);
+      return (string)body.SelectToken(&quot;params.name&quot;) ?? &quot;not_applicable&quot;;
+    }" />
+    <trace source="iq-toolbox-front-trace" severity="information">
+      <message>Hosted agent MCP request to Toolbox; agent token and caller context forwarded unchanged.</message>
+      <metadata name="apim_request_id" value="@(context.RequestId.ToString())" />
+      <metadata name="mcp_server_id" value="@(context.Api.Id)" />
+      <metadata name="platform_principal_oid" value="@(String.Join(&quot;,&quot;, ((Jwt)context.Variables[&quot;toolbox-caller&quot;]).Claims.GetValueOrDefault(&quot;oid&quot;, new string[0])))" />
+      <metadata name="token_audience" value="@(((Jwt)context.Variables[&quot;toolbox-caller&quot;]).Audiences.FirstOrDefault() ?? &quot;&quot;)" />
+      <metadata name="caller_context_present" value="@(((bool)context.Variables[&quot;caller-context-present&quot;]).ToString())" />
+      <metadata name="caller_context_hash" value="@((string)context.Variables[&quot;caller-context-hash&quot;])" />
+      <metadata name="mcp_method" value="@((string)context.Variables[&quot;mcp-method&quot;])" />
+      <metadata name="mcp_tool_name" value="@((string)context.Variables[&quot;mcp-tool-name&quot;])" />
+      <metadata name="toolbox_backend_url" value="{toolbox-endpoint}" />
+      <metadata name="user_visibility" value="downstream_user_identity_not_visible_at_this_hop" />
+    </trace>
+  </inbound>
+  <backend><forward-request timeout="180" buffer-response="false" /></backend>
+  <outbound>
+    <trace source="iq-toolbox-front-trace" severity="information">
+      <message>Toolbox MCP backend response.</message>
+      <metadata name="apim_request_id" value="@(context.RequestId.ToString())" />
+      <metadata name="mcp_server_id" value="@(context.Api.Id)" />
+      <metadata name="backend_status" value="@(context.Response.StatusCode.ToString())" />
+    </trace>
+  </outbound>
+  <on-error>
+    <trace source="iq-toolbox-front-trace" severity="error">
+      <message>@(context.LastError.Message)</message>
+      <metadata name="apim_request_id" value="@(context.RequestId.ToString())" />
+      <metadata name="error_reason" value="@(context.LastError.Reason)" />
+    </trace>
+  </on-error>
+</policies>

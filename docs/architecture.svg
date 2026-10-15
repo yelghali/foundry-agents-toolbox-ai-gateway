@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1060" viewBox="0 0 1680 1060" style="max-width:100%;height:auto" role="img" aria-labelledby="title desc">
+<title id="title">Foundry A/B/C identity and APIM placements</title>
+<desc id="desc">A uses project identity and APIM before Toolbox. B uses agent identity and APIM after Toolbox. C uses end-user identity and APIM before the agent. Each project has isolated Search and telemetry.</desc>
+<rect width="1680" height="1060" fill="white"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#495057"/></marker></defs>
+<text x="40" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="30" fill="#000000">
+<tspan x="40" dy="0">One lab, three authorization identities</tspan>
+</text>
+<text x="40" y="93" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">APIM Standard v2 | separate Search services and App Insights | historical live findings</tspan>
+</text>
+<text x="40" y="137" font-family="Segoe UI,Arial,sans-serif" font-size="22" fill="#000000">
+<tspan x="40" dy="0">A - Project identity</tspan>
+</text>
+<rect x="40" y="155" width="230" height="110" rx="10" fill="#CFE4FA" stroke="#0078D4" stroke-width="2"/>
+<text x="54" y="194" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="54" dy="0">User</tspan>
+</text>
+<path d="M280,210 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="365" y="155" width="230" height="110" rx="10" fill="#CFE4FA" stroke="#0078D4" stroke-width="2"/>
+<text x="379" y="194" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="379" dy="0">Prompt / hosted</tspan>
+<tspan x="379" dy="23.799999999999997">agent A</tspan>
+</text>
+<path d="M605,210 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="690" y="155" width="230" height="110" rx="10" fill="#CFE4FA" stroke="#0078D4" stroke-width="2"/>
+<text x="704" y="194" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="704" dy="0">APIM</tspan>
+<tspan x="704" dy="23.799999999999997">platform token</tspan>
+</text>
+<path d="M930,210 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1015" y="155" width="230" height="110" rx="10" fill="#CFE4FA" stroke="#0078D4" stroke-width="2"/>
+<text x="1029" y="194" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1029" dy="0">Toolbox</tspan>
+<tspan x="1029" dy="23.799999999999997">project credential</tspan>
+</text>
+<path d="M1255,210 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1340" y="155" width="230" height="110" rx="10" fill="#CFE4FA" stroke="#0078D4" stroke-width="2"/>
+<text x="1354" y="194" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1354" dy="0">Search A</tspan>
+<tspan x="1354" dy="23.799999999999997">index-a / kb-a</tspan>
+</text>
+<text x="40" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">Search sees project A MI. AB -&gt; Search B / KB B is denied.</tspan>
+</text>
+<text x="40" y="367" font-family="Segoe UI,Arial,sans-serif" font-size="22" fill="#000000">
+<tspan x="40" dy="0">B - Agent identity</tspan>
+</text>
+<rect x="40" y="385" width="230" height="110" rx="10" fill="#E8DAEF" stroke="#5C2D91" stroke-width="2"/>
+<text x="54" y="424" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="54" dy="0">User</tspan>
+</text>
+<path d="M280,440 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="365" y="385" width="230" height="110" rx="10" fill="#E8DAEF" stroke="#5C2D91" stroke-width="2"/>
+<text x="379" y="424" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="379" dy="0">Prompt / hosted</tspan>
+<tspan x="379" dy="23.799999999999997">agent B</tspan>
+</text>
+<path d="M605,440 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="690" y="385" width="230" height="110" rx="10" fill="#E8DAEF" stroke="#5C2D91" stroke-width="2"/>
+<text x="704" y="424" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="704" dy="0">Toolbox</tspan>
+<tspan x="704" dy="23.799999999999997">agent credential</tspan>
+</text>
+<path d="M930,440 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1015" y="385" width="230" height="110" rx="10" fill="#E8DAEF" stroke="#5C2D91" stroke-width="2"/>
+<text x="1029" y="424" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1029" dy="0">APIM</tspan>
+<tspan x="1029" dy="23.799999999999997">agent Search token</tspan>
+</text>
+<path d="M1255,440 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1340" y="385" width="230" height="110" rx="10" fill="#E8DAEF" stroke="#5C2D91" stroke-width="2"/>
+<text x="1354" y="424" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1354" dy="0">Search B</tspan>
+<tspan x="1354" dy="23.799999999999997">index-b / kb-b</tspan>
+</text>
+<text x="40" y="528" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">APIM sees each agent's distinct oid. BC -&gt; Search C / KB C is denied.</tspan>
+</text>
+<text x="40" y="597" font-family="Segoe UI,Arial,sans-serif" font-size="22" fill="#000000">
+<tspan x="40" dy="0">C - End-user identity</tspan>
+</text>
+<rect x="40" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
+<text x="54" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="54" dy="0">User</tspan>
+</text>
+<path d="M280,670 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="365" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
+<text x="379" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="379" dy="0">APIM</tspan>
+<tspan x="379" dy="23.799999999999997">user platform token</tspan>
+</text>
+<path d="M605,670 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="690" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
+<text x="704" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="704" dy="0">Prompt / hosted</tspan>
+<tspan x="704" dy="23.799999999999997">agent C</tspan>
+</text>
+<path d="M930,670 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1015" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
+<text x="1029" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1029" dy="0">Toolbox</tspan>
+<tspan x="1029" dy="23.799999999999997">managed user OBO</tspan>
+</text>
+<path d="M1255,670 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="1340" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
+<text x="1354" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
+<tspan x="1354" dy="0">IQ KB C</tspan>
+<tspan x="1354" dy="23.799999999999997">local index-c</tspan>
+</text>
+<text x="40" y="758" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">APIM correlates the user; no Search data grant to project C or its agents.</tspan>
+</text>
+<text x="40" y="878" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">Per project: Application Insights + Log Analytics; metadata-only custom events and APIM body logging disabled.</tspan>
+</text>
+<text x="40" y="928" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">B-confidential: question audit + direct model endpoint + forced store:false; answers excluded from tested telemetry.</tspan>
+</text>
+<text x="40" y="978" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">Limits: not one multi-index KB; no document-ACL proof; C raw Search blocked; optional OAuth needs consent.</tspan>
+</text>
+<text x="40" y="1018" font-family="Segoe UI,Arial,sans-serif" font-size="18" fill="#000000">
+<tspan x="40" dy="0">This is not the dedicated AI Gateway preview tier. No claim of zero provider/internal retention.</tspan>
+</text>
+</svg>
