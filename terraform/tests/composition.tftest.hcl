@@ -20,12 +20,27 @@ run "multiple_gateways_one_shared_foundry" {
     }
   }
   assert {
-    condition     = length(module.gateways) == 2 && length(azurerm_role_assignment.gateway_model_user) == 2
-    error_message = "Each new gateway requires its own identity and shared-model inference grant."
+    condition     = length(module.gateways) == 2 && length(azurerm_role_assignment.gateway_foundry_user) == 2
+    error_message = "Each new gateway requires its own identity and documented Foundry backend grant."
   }
   assert {
     condition     = alltrue([for gateway in values(module.gateways) : gateway.sku == "AIGateway"])
     error_message = "Every created gateway must be the dedicated AI Gateway tier."
+  }
+  assert {
+    condition = alltrue([
+      for assignment in values(azurerm_role_assignment.gateway_foundry_user) :
+      endswith(assignment.role_definition_id, "/53ca6127-db72-4b80-b1b0-d745d6d5456d")
+    ])
+    error_message = "Gateway managed identities require the Foundry User role ID documented for managed-identity backend authentication."
+  }
+  assert {
+    condition = alltrue([
+      for handoff in values(output.gateway_onboarding) :
+      handoff.backend_identity.required_role == "Foundry User" &&
+      startswith(handoff.runtime_key_scope, "All published models and tools")
+    ])
+    error_message = "The onboarding handoff must preserve the documented backend role and preview-wide runtime-key boundary."
   }
   assert {
     condition     = length(module.abc) == 0
@@ -36,7 +51,7 @@ run "multiple_gateways_one_shared_foundry" {
 run "foundry_only_no_gateways" {
   command = plan
   assert {
-    condition     = length(module.gateways) == 0 && length(azurerm_role_assignment.gateway_model_user) == 0
+    condition     = length(module.gateways) == 0 && length(azurerm_role_assignment.gateway_foundry_user) == 0 && length(output.gateway_onboarding) == 0
     error_message = "Foundry-only mode must not create a gateway or its roles."
   }
 }

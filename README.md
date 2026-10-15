@@ -42,7 +42,9 @@ Two different concepts are easy to confuse:
 | **AI gateway capabilities in APIM** | Capabilities for model, agent, MCP and A2A traffic on API Management tiers; individual capabilities have tier-specific availability. | Uses MCP/HTTP APIs, Entra validation, XML policies, correlation and App Insights diagnostics on Standard v2. |
 | **Dedicated AI Gateway tier (preview)** | A separate AI-focused offering with its own resource/runtime model, runtime access keys and policy experience. | **Terraform provisions it using `Microsoft.ApiManagement/aigateways` / `AIGateway`.** Plan-tested, not Azure-applied/runtime-verified here. Do not assume the original policies or managed-user flows are equivalent. |
 
-There is no Foundry **model-inference gateway association** configured by this lab. Its APIM APIs govern agent/tool/data hops; it does not automatically route all model calls through APIM or enable model token metering/caching.
+The Terraform stack gives each new gateway identity the documented **Foundry User** backend role. Model import, MCP publication and runtime-key creation remain explicit portal steps because the published ARM contract exposes the gateway resource but not those asset workflows. During preview, every runtime key can call **all** published models and tools in its gateway; this is not a per-user or per-asset authorization boundary. Use separate gateways when assets need authorization isolation.
+
+There is no Foundry **model-inference gateway association** until you complete that model import. The historical Standard v2 APIs govern agent/tool/data hops; they do not automatically route all model calls through APIM or enable model token metering/caching.
 
 Official references, checked October 15, 2026:
 [APIM AI gateway capabilities](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities) and
@@ -226,6 +228,7 @@ Terraform validation runs separately in [CI](.github/workflows/validate.yml): fo
 - **C raw Search:** both OpenAPI and native Search managed-user probes were broker-rejected as untrusted destinations. C's verified path is IQ.
 - **APIM in the wrong hop:** B APIM-before-Toolbox lost required agent context; C APIM-before-Toolbox managed OBO failed. The working placements above are deliberate.
 - **APIM visibility:** actual request URL/path/principal can be logged at the hop it sees. APIM before a KB does **not** observe that KB's internal local-index subqueries.
+- **Dedicated AI Gateway preview authorization:** runtime access keys are gateway-scoped and each key can call every published model and tool. Per-asset key scoping and the historical managed-user OBO behavior are not implemented or claimed.
 - **One human:** no two-human allow/deny proof. C's successful tests also checked the absence of project/agent Search data grants.
 - **Confidentiality:** container flags alone initially leaked model content through Foundry server traces. The corrected confidential agent uses the direct model endpoint, question-only audit and enforced `store:false`. Older test traces remain. This is not a zero-provider-retention guarantee.
 - **Hosted A2A:** the measured target returned `HostedAgentNotSupported`; the orchestrator preserves that actual platform result. Prompt-peer invocation passed.
@@ -241,3 +244,5 @@ Terraform validation runs separately in [CI](.github/workflows/validate.yml): fo
 - [Sensitive trace content](https://learn.microsoft.com/azure/foundry/observability/how-to/traces-sensitive-content)
 - [Model privacy and retention](https://learn.microsoft.com/azure/foundry/responsible-ai/openai/data-privacy)
 - [Search document permission enforcement](https://learn.microsoft.com/azure/search/search-query-access-control-rbac-enforcement)
+- [Manage dedicated AI Gateway models and tools](https://learn.microsoft.com/azure/api-management/ai-gateway-manage-models-tools)
+- [Govern dedicated AI Gateway assets](https://learn.microsoft.com/azure/api-management/ai-gateway-govern-secure-assets)

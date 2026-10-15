@@ -1,4 +1,14 @@
 mock_provider "azapi" {
+  mock_resource "azapi_resource" {
+    defaults = {
+      output = {
+        identity = { principalId = "11111111-1111-1111-1111-111111111111" }
+        properties = {
+          frontend = { defaultHostname = "gateway-module-test.azure-api.net" }
+        }
+      }
+    }
+  }
   mock_data "azapi_resource" {
     defaults = {
       output = {
@@ -20,7 +30,7 @@ variables {
 }
 
 run "dedicated_ai_gateway_not_classic_apim" {
-  command = plan
+  command = apply
   module { source = "./modules/ai-gateway" }
   assert {
     condition     = azapi_resource.gateway.type == "Microsoft.ApiManagement/aigateways@2026-09-01-preview" && output.sku == "AIGateway"
@@ -29,6 +39,13 @@ run "dedicated_ai_gateway_not_classic_apim" {
   assert {
     condition     = length(data.azapi_resource.backend_subnet) == 0 && length(keys(azapi_resource.gateway.body.properties)) == 0
     error_message = "Public gateway mode must not assume a VNet or subnet."
+  }
+  assert {
+    condition = endswith(output.models_endpoint, "/default/models") && endswith(
+      output.toolservers_endpoint,
+      "/default/toolservers"
+    )
+    error_message = "The module must expose the documented model and tool-server endpoint prefixes."
   }
 }
 

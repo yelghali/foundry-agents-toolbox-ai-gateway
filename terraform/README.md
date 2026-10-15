@@ -8,7 +8,7 @@ This is a **new infrastructure deployment option**, not an in-place conversion o
 
 | Setup | Resources | Example variables |
 | --- | --- | --- |
-| New AI gateways + one shared Foundry | One shared account, optional projects/models, one or many independent AI gateways, per-gateway MI inference grant | [gateways-shared-foundry](examples/gateways-shared-foundry.tfvars.example) |
+| New AI gateways + one shared Foundry | One shared account, optional projects/models, one or many independent AI gateways, per-gateway MI **Foundry User** backend grant | [gateways-shared-foundry](examples/gateways-shared-foundry.tfvars.example) |
 | Private Foundry only in an existing VNet | Foundry with public data-plane access disabled, one PE in your existing subnet, three DNS zones or reused zones/links; no gateways/Search/models by default | [private-foundry](examples/private-foundry.tfvars.example) |
 | AI gateway + private Foundry | The private Foundry setup plus a gateway using a **separate existing delegated backend subnet** in the same VNet | [gateways-private-foundry](examples/gateways-private-foundry.tfvars.example) |
 | Optional A/B/C lab | Adds the three projects, three keyless Search services, three App Insights/workspace pairs and matching role assignments | Set `enable_abc_lab = true`, a deployer object ID and a `gpt-4o-mini` deployment, on a **public** Foundry setup |
@@ -29,7 +29,7 @@ flowchart TB
     C --> F["shared-foundry module"]
     C --> G["ai-gateway module: zero / one / many"]
     C -. optional .-> A["abc-foundation: public lab only"]
-    G --> R["MI: model inference role on shared Foundry"]
+    G --> R["MI: Foundry User on shared Foundry"]
     R --> F
     F --> P["Optional projects and models"]
     F -. private mode .-> PE["Private endpoint NIC"]
@@ -71,13 +71,13 @@ module "team_gateway" {
 
 resource "azurerm_role_assignment" "gateway_inference" {
   scope                            = module.private_foundry.id
-  role_definition_name             = "Cognitive Services OpenAI User"
+  role_definition_id               = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
   principal_id                     = module.team_gateway.principal_id
   skip_service_principal_aad_check = true
 }
 ```
 
-The root composition already creates that per-gateway grant. It does not give the gateway Search data access.
+The role ID is the documented **Foundry User** role. Using its ID avoids failures while the former **Azure AI User** name finishes rolling out. The root composition already creates that per-gateway grant. It does not give the gateway Search data access.
 
 ## Prerequisites and deployment
 
@@ -102,6 +102,37 @@ For new gateways/shared Foundry, copy the corresponding example instead. **Nothi
 
 The PE is created in the **VNet's location**, which may differ from the Foundry account's region. The private setup disables public access from account creation, rather than opening it temporarily for provisioning.
 
+### Finish dedicated gateway onboarding
+
+The public `Microsoft.ApiManagement/aigateways@2026-09-01-preview` ARM contract creates and reads the gateway itself. Microsoft currently documents model import, MCP publication and runtime-key creation as AI Gateway portal workflows, so Terraform deliberately does not replay private portal calls.
+
+After apply:
+
+1. Run the infrastructure verifier. It checks the actual resource type/SKU, provisioning state and the gateway identity's **Foundry User** assignment.
+2. In the AI Gateway portal, use **Models -> Add models -> Import from Foundry -> Managed identity**.
+3. Optionally publish a tool server under **MCP servers**.
+4. Create a runtime access key under **Keys** and store it in an approved secret store.
+
+```powershell
+terraform output -json gateway_onboarding
+.\verify_ai_gateway.ps1 -GatewayName "your-team-ai-gateway"
+```
+
+The output is nonsecret and includes endpoint prefixes and the manual handoff. It never includes runtime keys.
+
+For an explicit, billable runtime smoke test after the portal steps, place the key only in the current process:
+
+```powershell
+$env:AI_GATEWAY_RUNTIME_ACCESS_KEY = "<secret-from-your-approved-store>"
+.\verify_ai_gateway.ps1 -GatewayName "your-team-ai-gateway" -TestRuntime `
+  -ModelName "your-imported-model-name" -ToolServerName "your-tool-server"
+Remove-Item Env:\AI_GATEWAY_RUNTIME_ACCESS_KEY
+```
+
+The verifier does not print model response content or the key. The runtime test is opt-in because it sends live traffic.
+
+> **Preview authorization boundary:** each runtime access key is gateway-scoped and can call **all published models and tools** in that gateway. Per-asset key scoping is unavailable. Separate gateways, not separate keys in one gateway, are the enforceable asset-isolation boundary for this tier today.
+
 ### Existing private DNS
 
 Default private mode creates and links:
@@ -124,8 +155,9 @@ The backend subnet enables **outbound** access to private Foundry. This module d
 
 The Foundry/project/model and optional ABC foundation are analogous to the Bicep setup. The dedicated AI Gateway tier has a **different management/runtime surface** from the Standard v2 XML/MCP APIs tested in the historical lab.
 
-- Terraform provisions the new gateway(s) and their MI inference permission.
+- Terraform provisions the new gateway(s) and gives each system identity the documented **Foundry User** role on the shared account.
 - Use the AI Gateway portal's **managed-identity** model import/onboarding flow for the shared account; local Foundry keys are disabled. This repository does not invent undocumented Terraform model/tool-asset APIs or export runtime access keys.
+- Runtime keys are application credentials, not end-user OBO tokens. During preview they authorize all published assets in that gateway.
 - It does **not** claim the earlier Standard v2 APIM placements, identity passthrough, user correlation, or confidentiality tests have passed on the new tier.
 - Existing `apim.bicep` / `setup.ps1` intentionally remain the original **Standard v2** path.
 - Python direct/Toolbox agent publication can now run **without any classic APIM**. Classic policy routes fail explicitly if given a dedicated gateway ID.
@@ -172,12 +204,14 @@ terraform test -no-color
 
 Tests use **mocked providers and plan assertions**: no credentials, Azure API calls, resources or teardown in Azure. They cover the real AIGateway type/SKU, multiple gateways, public/private Foundry-only, reuse of DNS, same-VNet constraints, wrong delegation/region, missing ABC model, and absence of B/C project data grants. Validation is not a successful Azure deployment or runtime OBO test.
 
-After a real private apply, from a VNet-connected host resolve all three account hostnames to private IPs, test Entra-authenticated data-plane access, and confirm an external client cannot use the account. For a gateway, also validate MI model import and private backend reachability before routing applications through it.
+After a real private apply, from a VNet-connected host resolve all three account hostnames to private IPs, test Entra-authenticated data-plane access, and confirm an external client cannot use the account. For a gateway, run `verify_ai_gateway.ps1`, complete MI model import, and validate private backend reachability before routing applications through it.
 
 ## Sources
 
 - [Dedicated AI Gateway create schema (pinned public ARM example)](https://github.com/Azure/azure-rest-api-specs/blob/ee4ba4c11aa237b364d1c42a2d623bb880e8c5a4/specification/apimanagement/resource-manager/Microsoft.ApiManagement/AIGateway/examples/2026-09-01-preview/AiGatewayCreate.json)
 - [Dedicated AI Gateway subnet/create-only schema](https://github.com/Azure/azure-rest-api-specs/blob/ee4ba4c11aa237b364d1c42a2d623bb880e8c5a4/specification/apimanagement/resource-manager/Microsoft.ApiManagement/AIGateway/AIGateway.tsp)
 - [AI Gateway overview](https://learn.microsoft.com/azure/api-management/ai-gateway-overview) and [networking](https://learn.microsoft.com/azure/api-management/ai-gateway-configure-private-networking)
+- [Manage AI Gateway models and tools](https://learn.microsoft.com/azure/api-management/ai-gateway-manage-models-tools)
+- [Govern AI Gateway assets, runtime keys and managed identity](https://learn.microsoft.com/azure/api-management/ai-gateway-govern-secure-assets)
 - [Foundry account ARM schema](https://learn.microsoft.com/azure/templates/microsoft.cognitiveservices/2025-06-01/accounts)
 - [Foundry private networking](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link) and [private DNS zones](https://learn.microsoft.com/azure/private-link/private-endpoint-dns)

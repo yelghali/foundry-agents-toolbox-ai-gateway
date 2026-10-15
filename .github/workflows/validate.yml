@@ -47,18 +47,12 @@ jobs:
         run: |
           python -m compileall -q .
           if ($LASTEXITCODE -ne 0) { throw "Python syntax failed." }
-          foreach ($file in Get-ChildItem *.ps1) {
+          foreach ($file in Get-ChildItem -Recurse -Filter *.ps1) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
           }
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Join-Path $PWD "terraform\export_config.ps1"), [ref]$tokens, [ref]$errors
-          ) | Out-Null
-          if ($errors.Count) { throw ($errors | Out-String) }
       - name: Compile Bicep without deploying resources
         shell: pwsh
         run: |

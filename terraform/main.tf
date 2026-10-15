@@ -4,6 +4,10 @@ resource "azurerm_resource_group" "lab" {
   tags     = var.tags
 }
 
+locals {
+  foundry_user_role_definition_id = "/subscriptions/${var.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/53ca6127-db72-4b80-b1b0-d745d6d5456d"
+}
+
 module "foundry" {
   source              = "./modules/shared-foundry"
   name                = var.foundry_name
@@ -30,10 +34,15 @@ module "gateways" {
   tags              = var.tags
 }
 
-resource "azurerm_role_assignment" "gateway_model_user" {
+moved {
+  from = azurerm_role_assignment.gateway_model_user
+  to   = azurerm_role_assignment.gateway_foundry_user
+}
+
+resource "azurerm_role_assignment" "gateway_foundry_user" {
   for_each                         = var.gateways
   scope                            = module.foundry.id
-  role_definition_name             = "Cognitive Services OpenAI User"
+  role_definition_id               = local.foundry_user_role_definition_id
   principal_id                     = module.gateways[each.key].principal_id
   skip_service_principal_aad_check = true
 }
