@@ -49,6 +49,7 @@ flowchart LR
 - **Allow:** Search A and KB A.
 - **Deny:** agent AB is configured for B but project A has no B data role.
 - **Boundary:** separate agents do not create separate permissions when the connection uses project identity.
+- **Code/test:** [project/Search RBAC](infra.bicep), [IQ connection setup](provision.py), [A and AB agents](publish_agents.py), [live allow/deny suite](verify.ps1).
 
 ### B - least-privilege agent identity
 
@@ -66,6 +67,7 @@ flowchart LR
 - **Allow:** each approved B agent identity receives access to B.
 - **Deny:** agent BC has no C data role.
 - **APIM placement:** after Toolbox, APIM observes the downstream agent identity.
+- **Code/test:** [agent publication and RBAC](publish_agents.py), [agent-token APIM path](configure_agent_gateway.py), [backend-result assertions](test_routes.py), [live allow/deny suite](verify.ps1).
 
 ### C - signed-in user identity
 
@@ -83,23 +85,26 @@ flowchart LR
 - Project C and its agents have no Search data roles.
 - The managed OBO path was verified for trusted Foundry IQ. The broker rejected Microsoft user tokens sent to the tested arbitrary Search/custom MCP endpoints; use generic OAuth plus APIM OBO for customer-controlled endpoints.
 - APIM is before the agent to observe the human caller. APIM cannot see the KB's internal Search source queries.
+- **Code/test:** [`UserEntraToken` IQ connection](provision.py), [user-token APIM ingress](configure_user_ingress.py), [backend-result assertions](test_routes.py), [live OBO suite](verify.ps1).
 
 ## TL;DR findings
 
-| Question | Result |
-| --- | --- |
-| Prompt agent -> IQ with project identity? | **Yes.** This is the direct documented recipe. |
-| Prompt agent -> IQ with its own identity? | **Yes, with an `agentic-identity` MCP connection and a published agent.** Unpublished agents share a development identity. Revalidate the exact IQ composition in your environment. |
-| Agents in one project communicate automatically? | **No.** Explicit orchestration is required. Prompt-agent reference passed; the tested hosted target returned `HostedAgentNotSupported`. |
-| Can one KB with indexes A and B enforce strict per-index isolation? | **Not proven. Do not use it as the only boundary.** Prefer separate Search services/KBs, or implement and test document-level permission enforcement. |
-| Did the deny paths really fail? | **Yes.** AB -> B and BC -> C were asserted from backend authorization errors, not model refusal text. |
-| Does Toolbox provide authorization? | **No.** It brokers the configured project, agent, or user credential. Entra/RBAC and the backend enforce access. |
-| Where should APIM sit? | Before the agent to observe/enforce the **user**; after Toolbox to observe/enforce the **agent**. It sees only the hop it receives. |
-| Can telemetry be user-aware? | **Yes.** Emit a non-PII correlation ID and user audit from the app/agent. Gateway metrics alone retain the connection key identity, not the human `oid`. |
-| Can answers be excluded from logs? | The confidential path enforced `store:false`; answers were absent from six checked telemetry tables. This is **not** a guarantee of zero provider/internal retention. |
-| Which gateway tiers are used? | The original A/B/C policy lab uses **APIM Standard v2**. Terraform creates the preview dedicated **`AIGateway`** resource. |
+| Question | Result | Code / test |
+| --- | --- | --- |
+| Prompt agent -> IQ with project identity? | **Yes.** This is the direct documented recipe. | [Connection](provision.py), [agents](publish_agents.py), [live test](verify.ps1) |
+| Prompt agent -> IQ with its own identity? | **Yes, with an `agentic-identity` MCP connection and a published agent.** Unpublished agents share a development identity. Revalidate the exact IQ composition in your environment. | [Identity/RBAC](publish_agents.py), [APIM path](configure_agent_gateway.py), [live test](verify.ps1) |
+| Agents in one project communicate automatically? | **No.** Explicit orchestration is required. Prompt-agent reference passed; the tested hosted target returned `HostedAgentNotSupported`. | [Orchestrator](publish_agents.py), [runtime result](hosted/main.py), [assertion](verify.ps1) |
+| Can one KB with indexes A and B enforce strict per-index isolation? | **Not proven. Do not use it as the only boundary.** Prefer separate Search services/KBs, or implement and test document-level permission enforcement. | [Isolated services/RBAC](infra.bicep), [KBs](provision.py), [deny tests](verify.ps1) |
+| Did the deny paths really fail? | **Yes.** AB -> B and BC -> C were asserted from backend authorization errors, not model refusal text. | [Deny agents](publish_agents.py), [backend classifier](test_routes.py), [live suite](verify.ps1) |
+| Does Toolbox provide authorization? | **No.** It brokers the configured project, agent, or user credential. Entra/RBAC and the backend enforce access. | [Auth selection](provision.py), [connection helper](common.py), [role grants](publish_agents.py) |
+| Where should APIM sit? | Before the agent to observe/enforce the **user**; after Toolbox to observe/enforce the **agent**. It sees only the hop it receives. | [User ingress](configure_user_ingress.py), [agent gateway](configure_agent_gateway.py), [A policy](policies/toolbox-proxy-policy.xml) |
+| Can telemetry be user-aware? | **Yes.** Emit a non-PII correlation ID and user audit from the app/agent. Gateway metrics alone retain the connection key identity, not the human `oid`. | [Agent audit](hosted/main.py), [telemetry verifier](verify_showcase.py), [queries](docs/observability.md) |
+| Can answers be excluded from logs? | The confidential path enforced `store:false`; answers were absent from six checked telemetry tables. This is **not** a guarantee of zero provider/internal retention. | [No-store runtime](hosted/main.py), [privacy verifier](verify_showcase.py), [offline tests](test_local.py) |
+| Which gateway tiers are used? | The original A/B/C policy lab uses **APIM Standard v2**. Terraform creates the preview dedicated **`AIGateway`** resource. | [Standard v2](apim.bicep), [AIGateway module](terraform/modules/ai-gateway/main.tf), [BYOM smoke test](smoke_admin_model_agent.py) |
 
 The results are measured historical behavior and can change with region, API version, and preview rollout.
+
+Live [route tests](test_routes.py) write redacted JSON records under the git-ignored `evidence/` directory, and the [showcase verifier](verify_showcase.py) consumes them. Those result files are deliberately not committed because they can contain user questions or model output.
 
 ## Recommended secure target
 
