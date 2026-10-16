@@ -108,7 +108,7 @@ Live [route tests](test_routes.py) write redacted JSON records under the git-ign
 
 ### Confidential hosted agent: storage and logs
 
-`b-confidential` is a **hosted MAF agent**, not a prompt agent.
+In Foundry, open **project `abc-b` -> agent `b-confidential`**. It is a **hosted MAF agent**, not a prompt agent.
 
 | Question | Concise answer | How |
 | --- | --- | --- |

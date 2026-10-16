@@ -95,6 +95,14 @@ class NoStoreTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_hosted_runtime_includes_telemetry_agents_dependency(self):
+        requirements = {
+            line.strip()
+            for line in (cm.ROOT / "hosted" / "requirements.txt").read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertIn("openai-agents>=0.3.3,<1", requirements)
+
     def test_classic_policies_reject_dedicated_gateway(self):
         with self.assertRaisesRegex(ValueError, "different runtime"):
             cm.standard_apim_id({
