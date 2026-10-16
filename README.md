@@ -99,12 +99,26 @@ flowchart LR
 | Does Toolbox provide authorization? | **No.** It brokers the configured project, agent, or user credential. Entra/RBAC and the backend enforce access. | [Auth selection](provision.py), [connection helper](common.py), [role grants](publish_agents.py) |
 | Where should APIM sit? | Before the agent to observe/enforce the **user**; after Toolbox to observe/enforce the **agent**. It sees only the hop it receives. | [User ingress](configure_user_ingress.py), [agent gateway](configure_agent_gateway.py), [A policy](policies/toolbox-proxy-policy.xml) |
 | Can telemetry be user-aware? | **Yes.** Emit a non-PII correlation ID and user audit from the app/agent. Gateway metrics alone retain the connection key identity, not the human `oid`. | [Agent audit](hosted/main.py), [telemetry verifier](verify_showcase.py), [queries](docs/observability.md) |
-| Can answers be excluded from logs? | The confidential path enforced `store:false`; answers were absent from six checked telemetry tables. This is **not** a guarantee of zero provider/internal retention. | [No-store runtime](hosted/main.py), [privacy verifier](verify_showcase.py), [offline tests](test_local.py) |
+| Can answers be excluded from logs? | **Conversation storage: no. Question logging: yes. Answer logging: absent from six tested tables.** This is not a zero-retention guarantee. | [No-store runtime](hosted/main.py), [privacy verifier](verify_showcase.py), [offline tests](test_local.py) |
 | Which gateway tiers are used? | The original A/B/C policy lab uses **APIM Standard v2**. Terraform creates the preview dedicated **`AIGateway`** resource. | [Standard v2](apim.bicep), [AIGateway module](terraform/modules/ai-gateway/main.tf), [BYOM smoke test](smoke_admin_model_agent.py) |
 
 The results are measured historical behavior and can change with region, API version, and preview rollout.
 
 Live [route tests](test_routes.py) write redacted JSON records under the git-ignored `evidence/` directory, and the [showcase verifier](verify_showcase.py) consumes them. Those result files are deliberately not committed because they can contain user questions or model output.
+
+### Confidential hosted agent: storage and logs
+
+`b-confidential` is a **hosted MAF agent**, not a prompt agent.
+
+| Question | Concise answer | How |
+| --- | --- | --- |
+| Does it store a conversation? | **No.** It is stateless. | MAF defaults and middleware set `store=false`; custom [ForceNoStore](hosted/main.py) overrides caller input and rejects `conversation` and `previous_response_id`. |
+| Does it log the question? | **Yes.** | Custom MAF [RequestAudit](hosted/main.py) writes the question and caller metadata to `abc_agent_request`. |
+| Does it log the answer? | **No in the tested telemetry.** | Custom telemetry never exports it; [verify_showcase.py](verify_showcase.py) confirmed the answer canary was absent from six App Insights tables. |
+| Is no-store purely a MAF SDK feature? | **No.** | MAF provides `default_options`, `AgentMiddleware`, content-capture flags, and `ResponsesHostServer`; the hard override is custom ASGI middleware added to that server. |
+| Is this zero provider retention? | **No guarantee.** | `store=false` prevents service-managed response/conversation state in this path; it does not prove that all provider security or internal retention is disabled. |
+
+The confidential path also uses MAF's direct [OpenAIChatClient](hosted/main.py) instead of `FoundryChatClient` to avoid the tested project-level model trace path. The live test confirmed that the answer was returned to the caller, was not retrievable afterward, and was absent from the checked telemetry window.
 
 ## Recommended secure target
 
