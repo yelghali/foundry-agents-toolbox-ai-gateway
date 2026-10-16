@@ -232,9 +232,8 @@ class ForceNoStore:
         if not isinstance(value, dict):
             await JSONResponse({"error": "invalid_request"}, status_code=400)(scope, receive, send)
             return
-        if value.get("previous_response_id") or value.get("conversation"):
-            await JSONResponse({"error": "confidential_agent_is_stateless"}, status_code=400)(scope, receive, send)
-            return
+        value.pop("previous_response_id", None)
+        value.pop("conversation", None)
         value["store"] = False
         encoded = json.dumps(value).encode()
         headers = [(key, val) for key, val in scope["headers"] if key.lower() != b"content-length"]

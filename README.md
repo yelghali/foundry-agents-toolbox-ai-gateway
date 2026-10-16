@@ -108,17 +108,17 @@ Live [route tests](test_routes.py) write redacted JSON records under the git-ign
 
 ### Confidential hosted agent: storage and logs
 
-In Foundry, open **project `abc-b` -> agent `b-confidential`**. It is a **hosted MAF agent**, not a prompt agent.
+In Foundry, open **project `abc-b` -> agent `b-confidential`** and select its **latest active version**. It is a **hosted MAF agent**, not a prompt agent.
 
 | Question | Concise answer | How |
 | --- | --- | --- |
-| Does it store a conversation? | **No.** It is stateless. | MAF defaults and middleware set `store=false`; custom [ForceNoStore](hosted/main.py) overrides caller input and rejects `conversation` and `previous_response_id`. |
+| Does it store a conversation? | **No.** It is stateless. | MAF defaults and middleware set `store=false`; custom [ForceNoStore](hosted/main.py) removes the Playground-supplied `conversation`. Explicit `previous_response_id` chaining is unsupported because no response is stored. |
 | Does it log the question? | **Yes.** | Custom MAF [RequestAudit](hosted/main.py) writes the question and caller metadata to `abc_agent_request`. |
 | Does it log the answer? | **No in the tested telemetry.** | Custom telemetry never exports it; [verify_showcase.py](verify_showcase.py) confirmed the answer canary was absent from six App Insights tables. |
 | Is no-store purely a MAF SDK feature? | **No.** | MAF provides `default_options`, `AgentMiddleware`, content-capture flags, and `ResponsesHostServer`; the hard override is custom ASGI middleware added to that server. |
 | Is this zero provider retention? | **No guarantee.** | `store=false` prevents service-managed response/conversation state in this path; it does not prove that all provider security or internal retention is disabled. |
 
-The confidential path also uses MAF's direct [OpenAIChatClient](hosted/main.py) instead of `FoundryChatClient` to avoid the tested project-level model trace path. The live test confirmed that the answer was returned to the caller, was not retrievable afterward, and was absent from the checked telemetry window.
+The confidential path also uses MAF's direct [OpenAIChatClient](hosted/main.py) instead of `FoundryChatClient` to avoid the tested project-level model trace path. The live test confirmed that Playground-shaped turns completed, the supplied conversation remained empty, the answer was returned but not retrievable afterward, and it was absent from the checked telemetry window.
 
 ## Recommended secure target
 

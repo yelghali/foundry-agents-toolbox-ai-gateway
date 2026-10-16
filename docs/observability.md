@@ -63,7 +63,7 @@ The corrected `b-confidential`:
 1. Uses the direct Azure OpenAI v1 model endpoint instead of the Foundry project model endpoint whose server-side spans initially captured answers despite container flags.
 2. Uses its agent identity for Search B and a model-only account-level grant for inference.
 3. Disables MAF/OTel sensitive content recording and writes an explicit question audit, not an answer/tool-result audit.
-4. Forces outer `store:false`, overrides a caller's `store:true`, rejects previous-response/conversation references, and sends model calls with storage disabled.
+4. Forces outer `store:false`, overrides a caller's `store:true`, removes the Playground conversation reference, and sends model calls with storage disabled. Explicit previous-response chaining remains unsupported because responses aren't stored.
 5. Was tested with an answer canary returned to the caller but absent across six telemetry tables after the corrected test start. Hosted response GET returned 404; a generic project GET returning 403 was **not** treated as storage proof.
 
 Question audit:

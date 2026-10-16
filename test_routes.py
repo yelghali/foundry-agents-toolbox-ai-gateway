@@ -92,6 +92,7 @@ def main():
     cm.audit(cohort["telemetrySettings"], "abc_client_invocation", {**metadata, "phase": "started"})
     started_at = datetime.now(timezone.utc).isoformat()
     start = time.monotonic()
+    conversation_items_after = None
     if agent["kind"] == "prompt":
         project = AIProjectClient(endpoint=cohort["project"]["endpoint"], credential=cm.credential(config))
         endpoint = project.agents.get(agent_name=args.agent).agent_endpoint
@@ -137,16 +138,28 @@ def main():
         )
         url = (cohort["userIngress"]["endpoint"] + "/hosted?api-version=v1" if args.route == "user-ingress" else
                f"{cohort['project']['endpoint']}/agents/{args.agent}/endpoint/protocols/openai/responses?api-version=v1")
-        response = requests.post(
-            url,
-            headers={"Authorization": f"Bearer {token}", "x-client-request-id": correlation},
-            json={"input": question, "stream": False, "store": args.request_store,
-                  "agent_session_id": session.agent_session_id},
-            timeout=600,
-        )
-        response.raise_for_status()
-        result = response.json()
-        http_status = response.status_code
+        conversations = project.get_openai_client().conversations if args.confidential else None
+        conversation = conversations.create() if conversations else None
+        payload = {
+            "input": question, "stream": False, "store": args.request_store,
+            "agent_session_id": session.agent_session_id,
+        }
+        if conversation:
+            payload["conversation"] = conversation.id
+        try:
+            response = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {token}", "x-client-request-id": correlation},
+                json=payload,
+                timeout=600,
+            )
+            response.raise_for_status()
+            result = response.json()
+            http_status = response.status_code
+        finally:
+            if conversation:
+                conversation_items_after = len(list(conversations.items.list(conversation_id=conversation.id)))
+                conversations.delete(conversation.id)
         pinned = project.agents.get_session(agent_name=args.agent, session_id=session.agent_session_id)
         if (
             pinned.version_indicator.agent_version != version
@@ -181,6 +194,7 @@ def main():
     passed = unsupported if args.expect_unsupported else denied if args.expect_denied else (
         result.get("status") == "completed" and bool(calls)
         and marker in text and not result.get("error")
+        and (not args.confidential or conversation_items_after == 0)
     )
     cm.audit(cohort["telemetrySettings"], "abc_client_invocation", {
         **metadata, "phase": "completed", "status": result.get("status"),
@@ -197,6 +211,7 @@ def main():
         "response": None if args.confidential else result,
         "confidential": args.confidential, "requested_store": args.request_store,
         "response_store_flag": result.get("store"),
+        "conversation_items_after": conversation_items_after,
     }
     directory = cm.ROOT / "evidence"
     directory.mkdir(exist_ok=True)

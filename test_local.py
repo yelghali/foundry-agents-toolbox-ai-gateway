@@ -47,9 +47,15 @@ class NoStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         return captured, messages
 
-    async def test_overrides_storing_caller(self):
-        captured, messages = await self.invoke(b'{"input":"question","store":true}')
-        self.assertFalse(json.loads(captured["body"])["store"])
+    async def test_strips_state_and_overrides_storing_caller(self):
+        captured, messages = await self.invoke(
+            b'{"input":"question","store":true,"conversation":"existing",'
+            b'"previous_response_id":"previous"}'
+        )
+        forwarded = json.loads(captured["body"])
+        self.assertFalse(forwarded["store"])
+        self.assertNotIn("conversation", forwarded)
+        self.assertNotIn("previous_response_id", forwarded)
         self.assertEqual(dict(captured["scope"]["headers"])[b"content-length"],
                          str(len(captured["body"])).encode())
         self.assertEqual(dict(captured["scope"]["headers"])[b"x-example"], b"retained")
@@ -58,8 +64,6 @@ class NoStoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_invalid_requests(self):
         for body, status in (
             (b"broken", 400), (b"\xff", 400), (b"[]", 400),
-            (b'{"conversation":"existing"}', 400),
-            (b'{"previous_response_id":"existing"}', 400),
             (b"x" * 1048577, 413),
         ):
             with self.subTest(body=body[:50]):
