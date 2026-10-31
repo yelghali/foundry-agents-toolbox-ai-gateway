@@ -50,7 +50,10 @@ be copied independently, without lab imports.
 
 The server exposes `/healthz` at local port 8000 and authenticated streamable MCP
 at `/mcp`. Put it behind reachable HTTPS for Foundry; local HTTP is test-only.
-Keep token/body logging off and use nonsensitive experiment UUIDs. In another
+Keep token/header logging off and use nonsensitive experiment UUIDs. The server
+emits `validated_mcp_exchange` JSON with the validated application identifiers,
+UUID query and returned demo result; these events persist in container logs.
+Do not expand the probe to private data. In another
 configured shell:
 
 ```powershell

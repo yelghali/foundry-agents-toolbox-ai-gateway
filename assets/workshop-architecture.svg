@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="400" viewBox="0 0 1100 400" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="490" viewBox="0 0 1100 490" role="img" aria-labelledby="title desc">
   <title id="title">Foundry hosted agent and Toolbox identity boundaries</title>
-  <desc id="desc">Toolbox forks to native Azure Search MCP for project, agent or user RBAC and to custom FastMCP for project or agent application tokens or separate C delegated OAuth. Custom A/B audience and principal claims require live verification. APIM does not exchange these tokens.</desc>
-  <rect width="1100" height="400" fill="#f5f7fb"/>
+  <desc id="desc">Toolbox forks to native Azure Search MCP for project, agent or user RBAC and to custom FastMCP for application tokens or separate C delegated OAuth. The optional isolated hosted agent to APIM to Toolbox to MCP observability route preserves original direct traffic. A custom application claims were observed; blocked B and C routes are not reported as successes. APIM does not exchange tokens.</desc>
+  <rect width="1100" height="490" fill="#f5f7fb"/>
   <g fill="#ffffff" stroke="#245a81" stroke-width="2">
     <rect x="20" y="150" width="155" height="80" rx="10"/>
     <rect x="230" y="150" width="180" height="80" rx="10"/>
@@ -25,4 +25,7 @@
     <text x="560" y="365" font-size="16">Optional APIM: ingress or data gateway. Telemetry records evidence; it does not grant access.</text>
     <text x="560" y="388" font-size="14">A/B custom audience acquisition is not proven by local tests or connection creation alone.</text>
   </g>
+  <rect x="80" y="410" width="940" height="60" rx="10" fill="#fff" stroke="#245a81" stroke-dasharray="6 4"/>
+  <text x="550" y="435" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="17">OPTIONAL isolated observability: Hosted agent → APIM → Toolbox → native KB / custom MCP</text>
+  <text x="550" y="457" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14">Platform audience ai.azure.com; caller header forwarded, only its hash logged. Direct original routes remain.</text>
 </svg>

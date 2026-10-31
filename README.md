@@ -13,9 +13,19 @@ managed user access to a trusted KB, or custom OAuth with FastMCP. Each includes
 code exploration, exercises, allow/deny evidence and cleanup.
 Independent [A/B samples](samples.md) support both native Search and custom
 application-token FastMCP targets, with explicit principal allowlists. Custom
-A/B live token acquisition remains unverified; local contracts do not prove it.
+A custom application-token acquisition was observed in the isolated workshop
+replay, with APIM and validated MCP query/result correlation. B's upstream
+Toolbox route encountered agent-instance context resolution errors; do not treat
+local contracts or a deployed server as live B token-acquisition proof.
 See [MOAW preview and publication](docs/moaw-publishing.md) for the hosted reader
 URL and catalog submission instructions.
+
+Optional isolated **Agent → APIM → Toolbox → MCP** exchanges are deployed and
+replayed with [`replay_observability.py`](replay_observability.py). See the workshop's
+foldable real exchanges for actual outcomes, including failures; a deployed
+resource or HTTP 200 wrapper is not a successful tool call. Original agents,
+their default traffic, and C's OAuth connection/secret/consent are not changed.
+Isolated diagnostics persist up to 8192 body bytes; use only nonsensitive prompts.
 
 Reference implementation for Microsoft Foundry agents using three authorization models:
 

@@ -9,7 +9,9 @@ named `provision_custom_toolbox.py` for a custom Entra application audience.
 Native Search targets remain unchanged. Both custom servers validate application
 tokens and explicit principal allowlists, rejecting C's delegated tokens.
 See each scenario README for API registration, local server and verification gate.
-**A/B custom live token acquisition is unverified**; local tests are not live evidence.
+**A custom acquisition was live observed** in the workshop's isolated APIM/MCP
+exchange. **B remains blocked at upstream Toolbox agent-instance resolution**;
+local tests are not live token-acquisition evidence.
 
 | Scenario | Connection auth | Downstream data principal | Search data role |
 | --- | --- | --- | --- |

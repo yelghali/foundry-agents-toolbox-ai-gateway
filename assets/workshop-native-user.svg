@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="330" viewBox="0 0 1100 330" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-labelledby="title desc">
   <title id="title">C native: platform-managed trusted Search user flow</title>
-  <desc id="desc">The signed-in user invokes a hosted agent. ResponsesHostServer receives user context. Toolbox uses UserEntraToken for a trusted Search knowledge base and Search authorizes the invoking user's object ID. No customer custom OAuth app or custom token endpoints are configured; tenant policy may still require platform connection authorization approval.</desc>
+  <desc id="desc">The signed-in user invokes a hosted agent. ResponsesHostServer receives user context. Toolbox uses UserEntraToken for a trusted Search knowledge base. An optional isolated hosted agent to APIM to Toolbox to trusted MCP route preserves original direct traffic and does not bypass platform authorization or perform custom OBO.</desc>
   <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#245a81"/></marker></defs>
-  <rect width="1100" height="330" fill="#f5f7fb"/>
+  <rect width="1100" height="420" fill="#f5f7fb"/>
   <g fill="#fff" stroke="#245a81" stroke-width="2">
     <rect x="20" y="100" width="170" height="100" rx="10"/>
     <rect x="250" y="100" width="210" height="100" rx="10"/>
@@ -26,4 +26,7 @@
     <text x="550" y="270" font-size="16">Complete platform connection authorization; tenant policy may require admin approval.</text>
     <text x="550" y="300" font-size="16">Negative control: same agent, another authorized invoker without Search data access.</text>
   </g>
+  <rect x="80" y="340" width="940" height="60" rx="10" fill="#fff" stroke="#245a81" stroke-dasharray="6 4"/>
+  <text x="550" y="365" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="17">OPTIONAL isolated observability: Hosted agent → APIM → Toolbox → trusted native KB MCP</text>
+  <text x="550" y="387" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14">UserEntraToken unchanged. APIM does not perform OBO or bypass consent. Original direct route is retained.</text>
 </svg>

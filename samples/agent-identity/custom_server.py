@@ -1,8 +1,10 @@
 """Standalone application-token MCP target; never acquires or exchanges tokens."""
 
 import contextvars
+import json
 import os
 import uuid
+from datetime import datetime, timezone
 
 import jwt
 import uvicorn
@@ -48,11 +50,18 @@ def identity_probe(experiment_id: str) -> dict:
     identity = IDENTITY.get()
     if identity is None:
         raise RuntimeError("Validated application identity required")
-    return {
+    result = {
         "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
         "experiment_id": experiment_id,
         "claims": identity,
     }
+    print(json.dumps({
+        "event": "validated_mcp_exchange",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": "tools/call", "tool": "identity_probe",
+        "query": {"experiment_id": experiment_id}, "result": result,
+    }), flush=True)
+    return result
 
 
 class EntraBoundary:

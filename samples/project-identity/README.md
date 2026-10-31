@@ -47,7 +47,10 @@ python .\custom_server.py
 It serves unauthenticated readiness at `http://localhost:8000/healthz` and
 authenticated streamable HTTP at `/mcp`. Use a reachable HTTPS deployment or
 trusted HTTPS ingress for Foundry; localhost is only for local tests. No token
-is acquired by this server. Keep access/body logging off; use nonsensitive UUIDs.
+is acquired by this server. Keep HTTP access/header logging off; use nonsensitive
+UUIDs. The server emits a `validated_mcp_exchange` JSON event containing only the
+validated application identifiers, UUID query and returned demo result. These
+events persist in container logs; do not expand the probe to private data.
 In a second configured shell, choose fresh connection/Toolbox names:
 
 ```powershell

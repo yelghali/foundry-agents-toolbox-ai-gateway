@@ -10,6 +10,7 @@ authors:
 contacts:
   - https://github.com/yelghali
 duration_minutes: 150
+navigation_levels: 2
 tags: azure, foundry, agents, identity, mcp, toolbox, api-management, python
 audience: developers, solution architects
 sections_title:
@@ -279,10 +280,17 @@ The hosted agent calls Toolbox; `ProjectManagedIdentity` selects the project ide
 Choose native Search KB MCP or custom FastMCP. The downstream service, not the
 invoking developer, validates and authorizes retrieval.
 
+| Target choice | Who hosts MCP / authorizes access? |
+| --- | --- |
+| **Azure Search MCP** | Azure's service-provided KB contract; Search RBAC grants the project MI Search Index Data Reader. No custom server. |
+| **Custom FastMCP** | Your HTTPS server validates application JWTs for your API audience and allowlists the project MI object ID. No Search RBAC or delegated-user identity. |
+
+## Azure Search MCP
+
 <details>
 <summary>Deploy A: prerequisites, roles and commands</summary>
 
-## Prerequisites / registration
+### Prerequisites / registration
 
 - Shared project data privileges are intentional. The commands below deploy the
   unchanged native target; for custom FastMCP follow the separate target setup in
@@ -294,7 +302,7 @@ invoking developer, validates and authorizes retrieval.
   This statement applies to native Search: custom A requires an API registration,
   but no delegated OAuth client, callback or manual agent token exchange.
 
-## Deployment checklist
+### Deployment checklist
 
 - From clone root, install/configure/provision with fresh names:
 
@@ -333,7 +341,7 @@ python .\invoke_hosted.py
 
 </details>
 
-## Agent code → Toolbox
+### Agent code → Toolbox
 
 Hosted environment only for this identity test. Complete
 [A runbook/scripts](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/README.md).
@@ -369,7 +377,7 @@ if __name__ == "__main__":
 
 Input: project/model and Toolbox endpoint. Output: a hosted Responses agent; the runtime does not acquire a Search token.
 
-## Toolbox configuration → Search connection
+### Toolbox configuration → Search connection
 
 This excerpt from [the A provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/provision_toolbox.py)
 defines the ARM connection payload and its Toolbox tool; the complete script submits both.
@@ -394,7 +402,7 @@ tool = MCPToolboxTool(
 
 Input: KB URL and project connection ID. Output: a connection-authenticated tool, not an agent-side `MCPTool`.
 
-## Service-provided MCP contract
+### Service-provided MCP contract
 
 For the native choice, no custom server is required. Search supplies the trusted KB endpoint:
 
@@ -405,7 +413,12 @@ Tool input/output schema: discover from this KB's MCP tools/list, not a guessed 
 Result: actual retrieval content containing <known marker>, or authorization failure
 ```
 
-## Custom FastMCP alternative → application-token API
+## Custom FastMCP
+
+**Custom target flow:** hosted agent → Toolbox (`ProjectManagedIdentity`) →
+your API's `/mcp` → JWT validation + project-principal ACL → `identity_probe`.
+
+### Connection and hosted agent
 
 Keep the hosted code above unchanged and use a **fresh custom-target connection
 and Toolbox**. The selected A connection remains `ProjectManagedIdentity`; its
@@ -423,6 +436,8 @@ ACL-only application access prerequisites are in the complete sample below.
 
 ```python
 # Custom target connection shape, not an agent-side token exchange.
+import os
+
 custom_connection_payload = {"properties": {
     "category": "RemoteTool", "authType": "ProjectManagedIdentity",
     "target": os.environ["CUSTOM_MCP_SERVER_URL"],
@@ -435,20 +450,179 @@ The [complete A sample](https://github.com/yelghali/foundry-agents-toolbox-ai-ga
 provides custom provisioning and server setup. The separate application-token
 server validates JWT signature, tenant issuer, exact audience and expiry before
 authorization. It requires the expected project principal, and a configured
-application role or explicit principal allowlist; it must reject delegated-user
+explicit principal allowlist (ACL, not role enforcement); it must reject delegated-user
 tokens. Call `identity_probe(experiment_id="<synthetic UUID>")`; the tool returns
 `CUSTOM_MCP_APPLICATION_VALIDATED` and safe validated identifier claims, not JWTs
 or arbitrary queries. Logging is disabled by default; protect any captured results.
 
+### Server code → validated project identity
+
+Run the [full A `custom_server.py`](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/custom_server.py).
+This compact equivalent uses its **required** validator, ASGI boundary and
+request-scoped `ContextVar`; save beside that file, not as an unauthenticated
+`mcp.run()` server. The boundary validates signature, v2 tenant issuer, exact
+audience, expiry and the principal ACL, rejects delegated tokens, then sets and
+resets `IDENTITY` around dispatch.
+
+```python
+import logging
+import os
+import uuid
+
+import uvicorn
+from fastmcp import FastMCP
+from custom_server import ApplicationTokenValidator, EntraBoundary, IDENTITY
+
+mcp = FastMCP("Application identity probe", include_fastmcp_meta=False)
+logger = logging.getLogger("custom_mcp.identity")
+
+@mcp.tool
+def identity_probe(experiment_id: str) -> dict:
+    experiment_id = str(uuid.UUID(experiment_id))
+    identity = IDENTITY.get()
+    if identity is None:
+        raise RuntimeError("Validated application identity required")
+    logger.info("project probe experiment=%s tid=%s oid=%s",
+                experiment_id, identity["tid"], identity["oid"])
+    return {"marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
+            "experiment_id": experiment_id, "claims": identity}
+
+if __name__ == "__main__":
+    validator = ApplicationTokenValidator(
+        os.environ["AZURE_TENANT_ID"],
+        os.environ["CUSTOM_MCP_AUDIENCE"],
+        [v.strip() for v in os.environ["CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS"].split(",")],
+    )
+    app = EntraBoundary(
+        mcp.http_app(path="/mcp", stateless_http=True, json_response=True), validator,
+    )
+    uvicorn.run(app, host="0.0.0.0", port=8000,
+                access_log=False, log_level="warning")
+```
+
+Inputs: `CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS` contains only the **project MI object
+ID**, never the invoking user ID; audience is the registered v2 API client-ID GUID.
+Output: validated identifier claims and marker. The optional INFO log is off by
+default; enable only in a protected lab sink, never log bearer tokens.
+
 **Custom proof:** request the advertised tool with a known marker, then use a
 different non-authorized project. Require a backend allow/deny and validated
 principal evidence. Local signed-token tests are not live Toolbox evidence.
+**Custom acquisition needs live verification:** an accepted connection payload or
+native Search success is not proof. The isolated A replay below did acquire a
+custom-audience application token and correlated its validated project principal.
 
 **One proof exercise:** retrieve the marker, then use a fresh connection to a separate
 test KB where the project MI lacks access. Require actual tool authorization denial,
 not model text. Correlate Active version/time, role scope and backend audit where available.
 A second authorized caller must not change the data principal. Never remove shared roles;
 label configuration inference separately from captured identity evidence. Continue to cleanup.
+
+---
+
+## Optional A observability: real logged exchanges
+
+These are actual **hosted agent → APIM → Toolbox → MCP** runs, not illustrative
+payloads. Original agents/default traffic remain direct and unchanged. API names
+start with `obs-20261031-`; body diagnostics are enabled only there, at 8192 bytes,
+with **no logged request/response headers**. Tokens, consent URLs and SDK baggage
+(opaque session/user propagation metadata) are redacted from exported evidence.
+Prompts/results and SDK metadata persist in Azure Monitor: use only public demo data.
+
+Set `$configPath` and `$customPath` to your existing ignored `.config.json` and
+`.custom-mcp-config.json`; do not publish either file. Run commands from the repository root.
+
+<details>
+<summary>Real logged exchange — A native KB: PASS at the MCP query/result boundary</summary>
+
+Isolated agent `obs-20261031-a-native`, pinned **v2**, Toolbox **v2**.
+APIM request `76e91f3f-c243-4f7f-9b1f-7f28f9716e8c`; POST at
+`2026-10-31T20:55:10.0167621Z`, response at `2026-10-31T20:55:12.7560888Z`, HTTP **200**.
+Caller context was present; only SHA-256 hash
+`AUlffY76/sqO0o/7DbQt1GT8C2aSLQmKZ0J7rmRQI/o=` was exported.
+
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1`.
+Exact captured request, with baggage redacted:
+
+```json
+{"method":"tools/call","params":{"_meta":{"traceparent":"00-d80ac5f9a5ba5d2d9b86f7d163553dd8-c870c06cfc63b113-01","baggage":"<baggage-redacted>","generateCitations":true,"KnowledgeSourceMetadata":[{"name":"ks-a","type":"searchIndex"}],"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"name":"observed___knowledge_base_retrieve","arguments":{"queries":["Find the normal access record in cohort A"]}},"jsonrpc":"2.0","id":3}
+```
+
+Exact captured response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {"_meta":{"agenticReasoningTokens":28,"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"content":[{"type":"text","text":"The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.","_meta":{"x-request-id":"216c96c5-00b7-4b0e-8f6c-38e2029a779c"}},{"type":"text","text":"{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}","_meta":{"x-request-id":"216c96c5-00b7-4b0e-8f6c-38e2029a779c","title":"Cohort A access record","preserveExactValue":false}}],"structuredContent":null}
+}
+```
+
+The configured KB URL is visible in `tool_configuration`; the returned
+`mcp://searchindex/normal` reference is observed result evidence, **not a captured
+Search HTTP destination/query**. Native Search's internally generated downstream
+query and server-side token claims were not observed at this upstream hop.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-native --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-native --action collect
+```
+
+Persistent safe evidence: `evidence\observability-a-native.json` and
+`evidence\observability-a-native-apim.json`. An earlier SDK dependency/import
+failure is retained separately; it is not counted as a successful call.
+
+</details>
+
+<details>
+<summary>Real logged exchange — A custom FastMCP: PASS with validated application principal</summary>
+
+Isolated agent `obs-20261031-a-custom`, pinned **v1**, Toolbox **v1**.
+APIM request `b0edd264-f627-4710-b8b2-097645d0f475`; POST at
+`2026-10-31T20:56:00.9115468Z`, response at `2026-10-31T20:56:01.0913094Z`, HTTP **200**.
+Caller context was present; only hash
+`O3e0czaXCqvPTiZRGRlJCtHWp0DkMZvP838G581OYvs=` was exported.
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1`.
+
+Exact captured request, with baggage redacted:
+
+```json
+{"method":"tools/call","params":{"_meta":{"traceparent":"00-3c92d5e24759a4e50b3d70a5a738f650-52b7b621ab1b8c89-01","baggage":"<baggage-redacted>","tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"name":"observed___identity_probe","arguments":{"experiment_id":"eafd7a76-c831-493e-a437-2848861fe1b0"}},"jsonrpc":"2.0","id":3}
+```
+
+Exact captured response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {"_meta":{"tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"content":[{"type":"text","text":"{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"eafd7a76-c831-493e-a437-2848861fe1b0\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\"}}"}],"isError":false,"structuredContent":{"marker":"CUSTOM_MCP_APPLICATION_VALIDATED","experiment_id":"eafd7a76-c831-493e-a437-2848861fe1b0","claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0"}}}
+}
+```
+
+Actual console event from **observed** Azure container `obs-application-mcp-20261031`,
+correlated by the same UUID (not just by configured URL):
+
+```json
+{"event":"validated_mcp_exchange","timestamp":"2026-10-31T20:56:01.079265+00:00","method":"tools/call","tool":"identity_probe","query":{"experiment_id":"eafd7a76-c831-493e-a437-2848861fe1b0"},"result":{"marker":"CUSTOM_MCP_APPLICATION_VALIDATED","experiment_id":"eafd7a76-c831-493e-a437-2848861fe1b0","claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0"}}}
+```
+
+The data `oid` is A's **project MI**, not the hosted agent's platform identity.
+The server verifies signature, tenant/v2 issuer, audience/timing and explicit
+principal ACL, rejecting delegated `scp` tokens. It performs no token acquisition
+or OBO. The new server's `/healthz` returned **200**; anonymous `/mcp` returned **401**
+`{"error":"invalid_application_token"}`. C's delegated-only server is unchanged.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-custom --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-custom --action collect
+python .\collect_mcp_exchanges.py --custom-config $customPath
+```
+
+Persistent safe evidence: `evidence\observability-a-custom.json`,
+`evidence\observability-a-custom-apim.json`, `evidence\observability-mcp-exchanges.json`.
+
+</details>
 
 ---
 
@@ -459,10 +633,17 @@ label configuration inference separately from captured identity evidence. Contin
 The same agent-to-Toolbox integration now uses `AgenticIdentityToken` on the connection.
 Search must authorize the calling instance, not the project MI.
 
+| Target choice | Who hosts MCP / authorizes access? |
+| --- | --- |
+| **Azure Search MCP** | Azure's service-provided KB contract; Search RBAC grants the calling agent instance Search Index Data Reader. No custom server. |
+| **Custom FastMCP** | Your HTTPS server validates application JWTs for your API audience and allowlists verified calling-agent principal object IDs. Not the user, project MI or blueprint ID. |
+
+## Azure Search MCP
+
 <details>
 <summary>Deploy B: prerequisites, calling identity, roles and commands</summary>
 
-## Prerequisites / registration
+### Prerequisites / registration
 
 - Separate agent data privileges; choose native Search KB or custom FastMCP.
   The commands below retain the native deployment. Custom target setup is separate in
@@ -475,7 +656,7 @@ Search must authorize the calling instance, not the project MI.
   may need to enable identity creation; local execution is not an equivalent test.
   Custom B does need a separately registered API and authorized agent principals.
 
-## Deployment checklist
+### Deployment checklist
 
 - From clone root, install/configure/provision:
 
@@ -509,11 +690,9 @@ $env:EXPECTED_TEXT = "<known marker>"
 python .\invoke_hosted.py
 ```
 
-## Connection code
-
 </details>
 
-## Agent code → Toolbox
+### Agent code → Toolbox
 
 Inside [B's hosted `main()`](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/hosted_agent.py), the authenticated client and tool share a runtime credential.
 Input: runtime credential and environment; output: the hosted agent's Toolbox tool.
@@ -539,7 +718,7 @@ async def main():
     await ResponsesHostServer(agent).run_async()
 ```
 
-## Toolbox configuration → calling-instance connection
+### Toolbox configuration → calling-instance connection
 
 Payload/tool shape only; the complete
 [B provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/provision_toolbox.py)
@@ -567,7 +746,7 @@ tool = MCPToolboxTool(
 
 Input: KB URL and connection ID. Output: a Toolbox tool whose connection selects the calling instance's downstream token.
 
-## Service-provided MCP contract
+### Service-provided MCP contract
 
 For the native choice, Search hosts MCP; do not manually exchange tokens.
 
@@ -578,7 +757,12 @@ Tool arguments: the schema advertised by this KB's MCP tools/list
 Result: retrieval content/marker if calling instance has Search access; otherwise denial
 ```
 
-## Custom FastMCP alternative → agent-token API
+## Custom FastMCP
+
+**Custom target flow:** hosted calling agent → Toolbox (`AgenticIdentityToken`) →
+your API's `/mcp` → JWT validation + agent-principal ACL → `identity_probe`.
+
+### Connection and hosted agent
 
 Keep B's hosted code unchanged. A **fresh custom connection and Toolbox** uses
 `AgenticIdentityToken`, never C's `OAuth2` connection:
@@ -592,6 +776,8 @@ Use the printed endpoint on a separate hosted version. Registration/ACL
 prerequisites are in B's complete sample.
 
 ```python
+import os
+
 custom_connection_payload = {"properties": {
     "category": "RemoteTool", "authType": "AgenticIdentityToken",
     "target": os.environ["CUSTOM_MCP_SERVER_URL"],
@@ -616,6 +802,56 @@ the result returns only safe validated identifier claims and marker
 Two hosted identities with only one allowed
 must produce backend allow/deny, with no project-identity fallback.
 
+### Server code → validated calling-agent identity
+
+Run the [full B `custom_server.py`](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/custom_server.py).
+This compact equivalent must be saved beside that file: its validator,
+`EntraBoundary` and request-scoped `IDENTITY` are required, not an optional
+wrapper. Never expose the bare FastMCP app. The boundary validates signature,
+v2 tenant issuer, exact audience, expiry and the agent-principal ACL, rejects
+delegated tokens, then sets and resets the identity context around dispatch.
+
+```python
+import logging
+import os
+import uuid
+
+import uvicorn
+from fastmcp import FastMCP
+from custom_server import ApplicationTokenValidator, EntraBoundary, IDENTITY
+
+mcp = FastMCP("Application identity probe", include_fastmcp_meta=False)
+logger = logging.getLogger("custom_mcp.identity")
+
+@mcp.tool
+def identity_probe(experiment_id: str) -> dict:
+    experiment_id = str(uuid.UUID(experiment_id))
+    identity = IDENTITY.get()
+    if identity is None:
+        raise RuntimeError("Validated application identity required")
+    logger.info("agent probe experiment=%s tid=%s oid=%s",
+                experiment_id, identity["tid"], identity["oid"])
+    return {"marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
+            "experiment_id": experiment_id, "claims": identity}
+
+if __name__ == "__main__":
+    validator = ApplicationTokenValidator(
+        os.environ["AZURE_TENANT_ID"],
+        os.environ["CUSTOM_MCP_AUDIENCE"],
+        [v.strip() for v in os.environ["CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS"].split(",")],
+    )
+    app = EntraBoundary(
+        mcp.http_app(path="/mcp", stateless_http=True, json_response=True), validator,
+    )
+    uvicorn.run(app, host="0.0.0.0", port=8000,
+                access_log=False, log_level="warning")
+```
+
+Inputs: tenant, v2 API client-ID audience and
+`CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS` containing only **verified allowed calling-agent
+principal object IDs**, never user IDs. Output: validated identifiers and marker.
+The optional INFO log is off by default; use a protected lab sink, never JWTs.
+
 **Verification gate:** accepted ARM payloads and locally minted test JWTs cannot
 prove Toolbox acquisition for custom APIs. Record actual backend claims/outcomes
 or clearly mark this custom flow **not live verified**. No agent/APIM exchange or
@@ -626,6 +862,113 @@ instances; only one has Search access. Require marker vs genuine tool authorizat
 denial. Record object IDs/effective roles and correlated outcomes; check inherited
 access and ensure project MI is not a fallback reader. Unavailable identity workflow
 is a blocker, not an allow. Continue to evidence/cleanup.
+
+---
+
+## Optional B observability: real logged exchanges
+
+<details>
+<summary>Real logged exchange — B native KB: BLOCKED at agent-instance context resolution</summary>
+
+Actual isolated `obs-20261031-b-native` **agent v3 / Toolbox v3**, including the
+bounded October-30 hosting SDK retry with request-scoped agent creation.
+APIM request `0f8d72ff-ffb1-452d-babf-6a9e4068861e`; request
+`2026-10-31T21:09:47.4998162Z`, response `2026-10-31T21:09:47.7646644Z`.
+The wrapper was HTTP **200**, but MCP returned **-32007** with downstream
+connection resolution **HTTP_400**: this is **not a successful KB call**.
+Caller context was present and forwarded; its exported SHA-256 hash was
+`uOhtoqcxTMbmOxCaHpxvltA160TG6/mr/23dYizYHvY=`.
+
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1`.
+Exact captured request, with baggage redacted:
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-3b8495ad966418ff6453883c486ad010-2c0bab6ea5c19604-01","baggage":"<baggage-redacted>"}}}
+```
+
+Exact captured response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32007,
+    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/iq-b-primary'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'iq-b-primary' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"
+  }
+}
+```
+
+Configured destination:
+`https://srchabcb7puse24s5tluc.search.windows.net/knowledgebases/kb-b/mcp?api-version=2026-05-01-preview`.
+**No native MCP query/result or Search internal query was observed**: discovery
+failed first. Header presence/hash is not proof that Toolbox resolved instance
+and blueprint context. Both pinned October-2 and October-30 SDK attempts
+encountered this same resolver error. No project/user authentication fallback,
+forged caller context, or manual token exchange was attempted.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario b-native --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario b-native --action collect
+```
+
+Safe evidence: `evidence\observability-b-native.json` and
+`evidence\observability-b-native-apim.json`; the earlier v2 attempt is retained
+in `evidence\observability-b-native-stable.json`.
+
+</details>
+
+<details>
+<summary>Real logged exchange — B custom FastMCP: deployed and ready, but BLOCKED before invocation</summary>
+
+Actual isolated `obs-20261031-b-custom` **agent v2 / Toolbox v2**.
+APIM request `f1b2c5ee-6ce1-4d81-bf10-804ecc8b431b`; POST
+`2026-10-31T21:10:24.3861895Z`, response `2026-10-31T21:10:24.608785Z`.
+Wrapper HTTP **200** / MCP **-32007** / source **HTTP_400**.
+Caller context was present; only hash
+`RE/w/kVgxwV/qKZz0WbA2gu98dHPVK8ntl2ZhoUXGLo=` was exported.
+
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1`.
+Exact captured request, with baggage redacted:
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-dab7e1c364de77f34f5a1284d965cb45-f32c30b1475b9976-01","baggage":"<baggage-redacted>"}}}
+```
+
+Exact captured response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32007,
+    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/obs-20261031-b-custom-data'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'obs-20261031-b-custom-data' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"
+  }
+}
+```
+
+Configured custom destination is the separate ready server
+`https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp`.
+Its principal ACL contains A's project MI and this B agent's
+`d6fb1ff2-6587-4169-b279-20103b371ab7`; it accepts only validated application tokens,
+not user/delegated tokens. **No B token claims or validated custom query/result
+were observed** for experiment `1163be77-5d52-4dd9-8853-f4ead9f9f2b8`.
+The server's readiness/anonymous-401 probes and A's successful call do not prove B
+acquisition. The configured URL is not an observed B destination.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario b-custom --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario b-custom --action collect
+python .\collect_mcp_exchanges.py --custom-config $customPath
+```
+
+Safe evidence: `evidence\observability-b-custom.json`,
+`evidence\observability-b-custom-apim.json`, `evidence\application-probe-check.json`.
+The earlier SDK attempt is retained in `evidence\observability-b-custom-stable.json`.
+No C OAuth secret/connection/consent was changed to enable this application-only target.
+
+</details>
 
 ---
 
@@ -761,6 +1104,59 @@ Record user object IDs, effective roles and actual marker/denial outcomes with
 available downstream evidence. Consent challenge is inconclusive. Check inherited roles;
 service-level RBAC is not document isolation (production needs ACL/filter enforcement).
 Describe managed native user access, not an unobserved OBO exchange. Continue to cleanup.
+
+---
+
+## Optional C-native observability: real logged exchange
+
+<details>
+<summary>Real logged exchange — C UserEntraToken native KB: BLOCKED by AADSTS500016</summary>
+
+Actual isolated `obs-20261031-c-native` **agent v2 / Toolbox v2**;
+`UserEntraToken` still references the original trusted KB connection.
+APIM request `d83d1d91-10a6-405a-b70a-a719bca0dddb`; POST
+`2026-10-31T20:58:51.3406004Z`, response `2026-10-31T20:58:52.2783609Z`.
+Wrapper HTTP **200**, MCP **-32007**, platform token-flow **HTTP_400**.
+Caller context was present; only hash
+`HhzxiZtErp6HAS4jUIk4FpMxNSqdr3qIydEjZOn2OwM=` was exported.
+
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1`.
+Exact captured request:
+
+```json
+{"method":"tools/list","jsonrpc":"2.0","id":2}
+```
+
+Exact captured response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32007,
+    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\r\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\r\\nStatus Code: 400 BadRequest\\r\\nError Code: ValidationError\\r\\nReason Phrase: Bad Request\\r\\nResponse Body: {\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"ValidationError\\\",\\n    \\\"severity\\\": null,\\n    \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: e6103290-ded6-4c37-b298-02c884b76600 Correlation ID: 95157e84-50f5-463b-8f68-c0faa441f021 Timestamp: 2026-10-31 20:58:52Z\\\",\\n    \\\"messageFormat\\\": null,\\n    \\\"messageParameters\\\": null,\\n    \\\"referenceCode\\\": null,\\n    \\\"detailsUri\\\": null,\\n    \\\"target\\\": \\\"UserToken\\\",\\n    \\\"details\\\": [\\n      {\\n        \\\"code\\\": \\\"Invalid\\\",\\n        \\\"severity\\\": null,\\n        \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: e6103290-ded6-4c37-b298-02c884b76600 Correlation ID: 95157e84-50f5-463b-8f68-c0faa441f021 Timestamp: 2026-10-31 20:58:52Z\\\",\\n        \\\"messageFormat\\\": null,\\n        \\\"messageParameters\\\": {},\\n        \\\"referenceCode\\\": null,\\n        \\\"detailsUri\\\": null,\\n        \\\"target\\\": \\\"UserToken\\\",\\n        \\\"details\\\": [],\\n        \\\"innerError\\\": null,\\n        \\\"debugInfo\\\": null,\\n        \\\"additionalInfo\\\": null\\n      }\\n    ],\\n    \\\"innerError\\\": null,\\n    \\\"debugInfo\\\": null,\\n    \\\"additionalInfo\\\": null\\n  },\\n  \\\"correlation\\\": {\\n    \\\"operation\\\": \\\"05418752701db43fa2041d4286645b63\\\",\\n    \\\"request\\\": \\\"00f71df1db2197cd\\\"\\n  },\\n  \\\"environment\\\": \\\"eastus2\\\",\\n  \\\"location\\\": \\\"eastus2\\\",\\n  \\\"time\\\": \\\"2026-10-31T20:58:52.2586051+00:00\\\",\\n  \\\"componentName\\\": \\\"obotoken\\\",\\n  \\\"statusCode\\\": 400\\n}\"}}]}"
+  }
+}
+```
+
+Configured destination:
+`https://srchabcc7puse24s5tluc.search.windows.net/knowledgebases/kb-c/mcp?api-version=2026-05-01-preview`.
+**No KB MCP query/result or downstream Search query was observed** because user
+token resolution failed during discovery. The error's timestamp/correlation IDs
+are actual platform evidence, not a guessed tenant-consent diagnosis.
+No project/agent Search grant, app-only fallback or custom OBO bypass was added
+to this track.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario c-native --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario c-native --action collect
+```
+
+Safe evidence: `evidence\observability-c-native.json`,
+`evidence\observability-c-native-apim.json`.
+
+</details>
 
 ---
 
@@ -1041,6 +1437,70 @@ the consenting user may differ from a later caller.
 
 ---
 
+## Optional C-OAuth observability: real logged exchange
+
+<details>
+<summary>Real logged exchange — C OAuth custom FastMCP: BLOCKED pending existing-connection consent</summary>
+
+Actual isolated `obs-20261031-c-custom` **agent v2 / Toolbox v3**, using the
+existing OAuth connection, audience and delegated-only FastMCP server unchanged.
+APIM request `e655a810-a569-4103-a831-e8ae0bda91f8`; POST
+`2026-10-31T21:10:59.3376409Z`, response `2026-10-31T21:11:00.0846683Z`.
+Wrapper HTTP **200**, MCP **-32006 / CONSENT_REQUIRED**; the hosted response
+was **incomplete**, not successful.
+Caller context was present; only hash
+`mKrIBlHocOMv/SMjeOXrB0XdUJ7qkPPLsXAgh9BA4UQ=` was exported.
+
+POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1`.
+Exact captured request, with baggage redacted:
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-b251bf4d699666940e36dfed6368f0ed-7915c5a6cf3f4066-01","baggage":"<baggage-redacted>"}}}
+```
+
+Exact captured response, with the opaque consent URL redacted:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": -32006,
+    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"CONSENT_REQUIRED\",\"message\":\"<consent-url-redacted>\"}}]}"
+  }
+}
+```
+
+Configured destination remains
+`https://abc-custom-mcp-e8383e4d.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp`.
+The requested experiment was `523a09b5-d7a1-4923-b21d-1dab8f5c4a82`.
+**No validated delegated query/result was observed for it**; neither old console
+events nor `/healthz` are evidence for this run.
+The platform returned an actual `oauth_consent_request`. Its opaque link/session
+state is excluded from exported/public evidence.
+
+An initial `store=false` attempt returned
+`OAuth consent continuation requires store=true.` The subsequent real
+`store=true` attempts reached the consent requirement on both SDK versions;
+only nonsensitive demo prompts were stored. No consent action was performed,
+and **no OAuth connection, client secret or C authorization policy was changed**.
+Completing authorized user/admin consent is an external prerequisite, not an
+excuse to replace `OAuth2` with application identity or a manual OBO workaround.
+
+```powershell
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario c-custom --action replay
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario c-custom --action collect
+python .\collect_mcp_exchanges.py --custom-config $customPath
+```
+
+Safe evidence: `evidence\observability-c-custom.json`,
+`evidence\observability-c-custom-apim.json`; the earlier real consent attempt is
+retained in `evidence\observability-c-custom-consent-stable.json`.
+
+</details>
+
+---
+
 # Evidence, troubleshooting and optional gateway extension
 
 ## Record one selected track
@@ -1068,6 +1528,53 @@ the consenting user may differ from a later caller.
 - No logs: verify diagnostics/ingestion; absence in one query does not prove no storage.
 
 ## Optional gateway extension
+
+- The six real exchanges above use separate `obs-20261031-*` **upstream** APIs;
+  do not enable body capture or repoint default traffic on original APIs.
+  These replay helpers target an already configured ABC lab, not the independent
+  environment-variable sample provisioners:
+
+```powershell
+# Existing ignored ABC runtime configurations; never commit their contents.
+$configPath = "..\foundry-ai-gateway\foundry-abc-observability\.config.json"
+$customPath = "..\foundry-ai-gateway\foundry-abc-observability\.custom-mcp-config.json"
+az account show --query "{name:name,state:state}" -o json
+
+# New application-only server; reuses existing API registration without editing C OAuth.
+python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action build
+python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action deploy
+$customEndpoint = "https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp"
+
+# Choose only the desired isolated scenario; existing original agents are never republished.
+python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-custom --action deploy --custom-endpoint $customEndpoint
+python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action allowlist
+python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action check
+
+# Correlate safe captures, then validate embedded bodies and isolation.
+python .\collect_mcp_exchanges.py --custom-config $customPath
+python .\compile_observability_evidence.py
+python .\validate_observability_docs.py
+python .\audit_observability.py --config $configPath
+python -m unittest test_observability test_custom_application_samples test_standalone_samples test_local -q
+```
+
+- `--scenario` accepts `a-native`, `a-custom`, `b-native`, `b-custom`, `c-native`,
+  `c-custom`; replay commands are included in each foldable. Hosted sessions use
+  a specific recorded agent version, never an original default selector.
+- The bounded B/C-OAuth alternative used
+  `--republish --requirements .\hosted\observability-latest-requirements.txt`
+  on **only the isolated probe names**. It did not resolve B's platform context
+  error or C's missing OAuth consent. The stable manifest avoids the original
+  incompatible `mcp.Client` import; both versions and initial failures are retained.
+- Allow Azure Monitor ingestion delay before `--action collect`. A new replay
+  has new IDs/timestamps: re-check and update historical workshop excerpts rather
+  than treating the captured bodies above as synthetic expected outputs.
+- Inventory: six isolated APIs, six Toolboxes, six hosted agent names, two custom
+  downstream connections, and container `obs-application-mcp-20261031`.
+  `evidence\observability-real-exchanges.json` contains correlated safe captures.
+  Read-only auditing confirmed all **11 original agent default endpoints unchanged**
+  across replay attempts and all six isolated diagnostics at 8192 bytes with no headers.
+  Native Search internal queries remain **not observed**, not reconstructed.
 
 - Review root README before billable full `setup.ps1`/`verify.ps1`; these assume/provision
   all showcase routes, not a copied sample.

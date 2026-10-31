@@ -8,6 +8,20 @@ No separate `index.yml` is required by that guidance.
 
 ## Preview
 
+The workshop now includes six foldable **real logged exchanges** for the optional
+upstream APIM route. Captures are historical, nonsensitive replay data; SDK baggage,
+opaque consent URLs/session state and credentials must never be published.
+Before publishing updated excerpts, validate them against local ignored evidence:
+
+```powershell
+python .\compile_observability_evidence.py
+python .\validate_observability_docs.py
+```
+
+Keep blocked results visibly blocked. An HTTP 200 wrapper with JSON-RPC error,
+configured target URL, or an old MCP console event is not a successful current run.
+Internal Search queries were not captured and must not be fabricated.
+
 Once this change is committed and pushed to the public `main` branch, open:
 
 https://aka.ms/ws?src=gh:yelghali/foundry-agents-toolbox-ai-gateway/main/
@@ -36,6 +50,18 @@ server afterward. Verify all pages, the architecture image, navigation and links
 The workshop uses absolute GitHub implementation links because its sample code lives
 outside the MOAW asset directory. Implementation links target `main`; maintain them
 alongside code changes.
+
+## Target navigation in A and B
+
+Keep **Azure Search MCP** and **Custom FastMCP** as level-two headings outside
+foldable blocks. Use level-three headings for deployment, agent, connection and
+server steps; do not add generic level-two steps between the target choices.
+MOAW's [menu builder](https://github.com/microsoft/moaw/blob/main/packages/website/src/app/workshop/workshop.ts)
+includes headings up to `baseLevel + navigation_levels - 1`: with this workshop's
+`navigation_levels: 2` and level-one page titles, only level-two headings become
+submenu entries. Each page resets its heading slugs, so the same target names
+can safely appear in both independent tracks. Confirm both choices in the
+sidebar during preview; this source check is not browser-rendering evidence.
 
 ## Foldable deployment blocks
 

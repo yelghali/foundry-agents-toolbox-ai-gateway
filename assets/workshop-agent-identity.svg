@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="510" viewBox="0 0 1100 510" role="img" aria-labelledby="title desc">
   <title id="title">B: calling agent instance identity retrieval flow</title>
-  <desc id="desc">Toolbox AgenticIdentityToken forks to native Search KB MCP with agent Search RBAC or custom FastMCP with JWT and agent principal authorization. Custom audience acquisition and oid mapping are experimental until live observed. No manual token exchange or project fallback.</desc>
+  <desc id="desc">Toolbox AgenticIdentityToken forks to native Search KB MCP with agent Search RBAC or custom FastMCP with JWT and agent principal authorization. The optional isolated hosted agent to APIM to Toolbox to MCP route preserves original direct traffic. Missing agent-instance context is a blocked result, not a reason for manual token exchange or project fallback.</desc>
   <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#245a81"/></marker></defs>
-  <rect width="1100" height="420" fill="#f5f7fb"/>
+  <rect width="1100" height="510" fill="#f5f7fb"/>
   <g fill="#fff" stroke="#245a81" stroke-width="2">
     <rect x="20" y="100" width="170" height="100" rx="10"/>
     <rect x="250" y="100" width="210" height="100" rx="10"/>
@@ -32,4 +32,7 @@
     <text x="550" y="380" font-size="16">Negative control: same caller, different unauthorized agent principal.</text>
     <text x="550" y="407" font-size="14">No agent/APIM token exchange; C delegated OAuth remains separate.</text>
   </g>
+  <rect x="80" y="430" width="940" height="60" rx="10" fill="#fff" stroke="#245a81" stroke-dasharray="6 4"/>
+  <text x="550" y="455" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="17">OPTIONAL isolated observability: Hosted agent → APIM → Toolbox → native KB / custom FastMCP</text>
+  <text x="550" y="477" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="14">No project/user fallback. Caller-context presence/hash is evidence, not proof of agent identity resolution.</text>
 </svg>
