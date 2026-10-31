@@ -261,6 +261,12 @@ with io.BytesIO() as archive:
 
 ![A flow: invoking user to hosted agent, Toolbox project identity and Search RBAC](assets/workshop-project-identity.svg)
 
+The hosted agent calls a Toolbox endpoint; its connection supplies the project MI to Search.
+Search, not the invoking developer, authorizes retrieval.
+
+<details>
+<summary>Deploy A: prerequisites, roles and commands</summary>
+
 ## Prerequisites / registration
 
 - Shared project data privileges are intentional; use a trusted Search KB.
@@ -306,7 +312,9 @@ $env:EXPECTED_TEXT = "<known marker>"
 python .\invoke_hosted.py
 ```
 
-## Copyable runtime
+</details>
+
+## Agent code → Toolbox
 
 Hosted environment only for this identity test. Complete
 [A runbook/scripts](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/README.md).
@@ -340,6 +348,44 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+Input: project/model and Toolbox endpoint. Output: a hosted Responses agent; the runtime does not acquire a Search token.
+
+## Toolbox configuration → Search connection
+
+This excerpt from [the A provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/provision_toolbox.py)
+defines the ARM connection payload and its Toolbox tool; the complete script submits both.
+
+```python
+import os
+from azure.ai.projects.models import MCPToolboxTool
+
+target = os.environ["MCP_SERVER_URL"]
+project_id = os.environ["FOUNDRY_PROJECT_RESOURCE_ID"].rstrip("/")
+connection_id = f"{project_id}/connections/{os.environ['CONNECTION_NAME']}"
+connection_payload = {"properties": {
+    "category": "RemoteTool", "authType": "ProjectManagedIdentity",
+    "target": target, "audience": "https://search.azure.com",
+    "isSharedToAll": False, "metadata": {"ApiType": "Azure"},
+}}
+tool = MCPToolboxTool(
+    name="retrieve", server_label="knowledge", server_url=target,
+    project_connection_id=connection_id, require_approval="never",
+)
+```
+
+Input: KB URL and project connection ID. Output: a connection-authenticated tool, not an agent-side `MCPTool`.
+
+## Service-provided MCP contract
+
+No custom MCP server is required. Search supplies the trusted KB endpoint:
+
+```text
+https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview
+Agent request: retrieve <synthetic test document> using the advertised retrieval tool
+Tool input/output schema: discover from this KB's MCP tools/list, not a guessed signature
+Result: actual retrieval content containing <known marker>, or authorization failure
+```
+
 **One proof exercise:** retrieve the marker, then use a fresh connection to a separate
 test KB where the project MI lacks access. Require actual tool authorization denial,
 not model text. Correlate Active version/time, role scope and backend audit where available.
@@ -351,6 +397,12 @@ label configuration inference separately from captured identity evidence. Contin
 # B: calling agent identity
 
 ![B flow: user invocation, hosted calling identity and instance-specific Search role](assets/workshop-agent-identity.svg)
+
+The same agent-to-Toolbox integration now uses `AgenticIdentityToken` on the connection.
+Search must authorize the calling instance, not the project MI.
+
+<details>
+<summary>Deploy B: prerequisites, calling identity, roles and commands</summary>
 
 ## Prerequisites / registration
 
@@ -398,6 +450,36 @@ python .\invoke_hosted.py
 
 ## Connection code
 
+</details>
+
+## Agent code → Toolbox
+
+Inside [B's hosted `main()`](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/hosted_agent.py), the authenticated client and tool share a runtime credential.
+Input: runtime credential and environment; output: the hosted agent's Toolbox tool.
+
+```python
+import os
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
+from azure.identity import DefaultAzureCredential
+
+async def main():
+    credential = DefaultAzureCredential()
+    agent = Agent(
+        client=FoundryChatClient(
+            project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
+            model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"], credential=credential,
+        ),
+        tools=FoundryToolbox(credential, name="retrieval", url=os.environ["TOOLBOX_ENDPOINT"]),
+        instructions="Return actual requested Toolbox results/errors; never invent markers or identities.",
+        default_options={"store": False},
+    )
+    await ResponsesHostServer(agent).run_async()
+```
+
+## Toolbox configuration → calling-instance connection
+
 Payload/tool shape only; the complete
 [B provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/provision_toolbox.py)
 submits ARM PUT and Toolbox create/update.
@@ -422,6 +504,19 @@ tool = MCPToolboxTool(
 )
 ```
 
+Input: KB URL and connection ID. Output: a Toolbox tool whose connection selects the calling instance's downstream token.
+
+## Service-provided MCP contract
+
+Search hosts MCP; do not build your own server or manually exchange tokens.
+
+```text
+https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview
+Agent request: retrieve <synthetic test document> using the advertised retrieval tool
+Tool arguments: the schema advertised by this KB's MCP tools/list
+Result: retrieval content/marker if calling instance has Search access; otherwise denial
+```
+
 **One proof exercise:** same authorized caller and Toolbox, two distinct calling
 instances; only one has Search access. Require marker vs genuine tool authorization
 denial. Record object IDs/effective roles and correlated outcomes; check inherited
@@ -433,6 +528,12 @@ is a blocker, not an allow. Continue to evidence/cleanup.
 # C native: managed user context and a trusted Search KB
 
 ![C native flow: signed-in user context through Toolbox to trusted Search](assets/workshop-native-user.svg)
+
+The hosted runtime supplies managed user context to Toolbox; `UserEntraToken` selects downstream authentication.
+Search checks the user's RBAC, without custom OAuth client or MCP server code.
+
+<details>
+<summary>Deploy C native: prerequisites, user authorization, roles and commands</summary>
 
 ## Prerequisites / registration / consent
 
@@ -485,7 +586,35 @@ $env:EXPECTED_TEXT = "<known marker>"
 python .\invoke_hosted.py
 ```
 
-## Native connection code
+</details>
+
+## Agent code → Toolbox
+
+This is the same runtime pattern in [the native hosted agent](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/trusted-kb/hosted_agent.py).
+Input: hosted credential and Toolbox URL; output: a hosted Responses agent, not a manually forwarded user token.
+
+```python
+import os
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
+from azure.identity import DefaultAzureCredential
+
+async def main():
+    credential = DefaultAzureCredential()
+    agent = Agent(
+        client=FoundryChatClient(
+            project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
+            model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"], credential=credential,
+        ),
+        tools=FoundryToolbox(credential, name="retrieval", url=os.environ["TOOLBOX_ENDPOINT"]),
+        instructions="Return actual requested Toolbox results/errors; never invent markers or identities.",
+        default_options={"store": False},
+    )
+    await ResponsesHostServer(agent).run_async()
+```
+
+## Toolbox configuration → native user connection
 
 Configuration only, **not a manual token exchange**. Complete
 [native runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/trusted-kb/README.md)
@@ -509,6 +638,19 @@ tool = MCPToolboxTool(
 )
 ```
 
+Input: KB URL and connection ID. Output: a Toolbox tool using managed user authentication.
+
+## Service-provided MCP contract
+
+The trusted KB provides its own MCP tools and argument schema; no FastMCP code belongs in this track.
+
+```text
+https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview
+Agent request: retrieve <synthetic test document> using the advertised retrieval tool
+Tool arguments: discover this KB's schema through MCP tools/list
+Result: actual retrieval content/marker for an authorized user; otherwise denial
+```
+
 **One proof exercise:** two users may invoke the same Active agent, only one has
 Search access. Sign in separately, complete required authorization and retry.
 Record user object IDs, effective roles and actual marker/denial outcomes with
@@ -521,6 +663,12 @@ Describe managed native user access, not an unobserved OBO exchange. Continue to
 # C custom: OAuth2 Toolbox to your FastMCP API
 
 ![C custom flow: browser authorization code and refresh to a JWT-validating API](assets/workshop-custom-oauth.svg)
+
+The hosted agent calls Toolbox; an OAuth connection obtains the authorizing user's API token.
+Your FastMCP boundary validates that token before dispatching `probe_echo`; this is not proven OBO.
+
+<details>
+<summary>Deploy C custom: app registration, consent, HTTPS hosting and commands</summary>
 
 ## Prerequisites / registration / consent
 
@@ -590,7 +738,35 @@ $env:EXPECTED_TEXT = "CUSTOM_MCP_ENTRA_VALIDATED"
 python .\invoke_hosted.py
 ```
 
-## OAuth and validation code
+</details>
+
+## Agent code → Toolbox
+
+The [custom hosted agent](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/hosted_agent.py) uses the same runtime pattern.
+Input: project/model and Toolbox URL; output: a hosted Responses agent. OAuth belongs to the connection.
+
+```python
+import os
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
+from azure.identity import DefaultAzureCredential
+
+async def main():
+    credential = DefaultAzureCredential()
+    agent = Agent(
+        client=FoundryChatClient(
+            project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
+            model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"], credential=credential,
+        ),
+        tools=FoundryToolbox(credential, name="retrieval", url=os.environ["TOOLBOX_ENDPOINT"]),
+        instructions="Return actual requested Toolbox results/errors; never invent markers or identities.",
+        default_options={"store": False},
+    )
+    await ResponsesHostServer(agent).run_async()
+```
+
+## OAuth client → connection → Toolbox configuration
 
 Complete [custom runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/README.md),
 [provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/provision_toolbox.py)
@@ -598,18 +774,53 @@ and [server middleware](https://github.com/yelghali/foundry-agents-toolbox-ai-ga
 Provider endpoints are explicit; provisioner passes them to
 `azd ai connection create --auth-type oauth2`:
 
-```python
-import os
-base = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/"
-authorization_url = base + "authorize"
-token_url = base + "token"
-refresh_url = base + "token"
-scopes = os.environ["OAUTH_SCOPE"] + " offline_access"
+Input: client ID/secret, API scope and tenant endpoints. Output: an OAuth connection; register its discovered Web redirect URI and complete user authorization before invoking.
+
+```powershell
+$base = "https://login.microsoftonline.com/$env:AZURE_TENANT_ID/oauth2/v2.0/"
+azd ai connection create $env:CONNECTION_NAME --kind remote-tool `
+  --target $env:MCP_SERVER_URL --auth-type oauth2 `
+  --authorization-url "${base}authorize" --token-url "${base}token" `
+  --refresh-url "${base}token" --client-id $env:OAUTH_CLIENT_ID `
+  --client-secret $env:OAUTH_CLIENT_SECRET `
+  --scopes "$env:OAUTH_SCOPE offline_access" `
+  --project-endpoint $env:FOUNDRY_PROJECT_ENDPOINT --no-prompt --force
 ```
 
-PyJWT core (`server-requirements.txt`); middleware rejects missing/invalid tokens
-**before** `probe_echo`. API validates Toolbox's token; it neither exchanges it nor
-implements an OAuth authorization server:
+Use the complete provisioner for redacted errors, timeout handling and redirect discovery; secret-in-argv requires a trusted workstation and no debug logging.
+After connection creation, this SDK excerpt attaches the custom server to Toolbox:
+
+```python
+import os
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import MCPToolboxTool
+from azure.identity import AzureCliCredential
+
+endpoint = os.environ["FOUNDRY_PROJECT_ENDPOINT"].rstrip("/")
+connection_id = (
+    os.environ["FOUNDRY_PROJECT_RESOURCE_ID"].rstrip("/")
+    + "/connections/" + os.environ["CONNECTION_NAME"]
+)
+credential = AzureCliCredential(tenant_id=os.environ["AZURE_TENANT_ID"])
+with AIProjectClient(endpoint=endpoint, credential=credential) as project:
+    version = project.toolboxes.create_version(
+        name=os.environ["TOOLBOX_NAME"],
+        tools=[MCPToolboxTool(
+            name="retrieve", server_label="custom_probe",
+            server_url=os.environ["MCP_SERVER_URL"],
+            project_connection_id=connection_id, require_approval="never",
+        )],
+    )
+    project.toolboxes.update(name=os.environ["TOOLBOX_NAME"], default_version=version.version)
+print("TOOLBOX_ENDPOINT=" + endpoint + f"/toolboxes/{os.environ['TOOLBOX_NAME']}/mcp?api-version=v1")
+```
+
+Input: existing OAuth connection ID and HTTPS MCP URL. Output: the Toolbox endpoint consumed by the agent.
+
+## Custom MCP: validate token before dispatch
+
+The following three excerpts compose the [complete server](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/server.py).
+Use its pinned server requirements; this validates a supplied token, not an OAuth authorization server or token exchange.
 
 ```python
 import os
@@ -637,6 +848,79 @@ def validate(token):
 
 Signature/issuer/audience/timing/tenant/scope are enforced; `azp`/`ver` are returned,
 not client allowlist checks. Delegated scope is not a row/document ACL.
+
+### Request boundary → validated identity context
+
+Input: HTTP bearer token. Output: request-local validated claims, or 401 before any MCP handler; `/healthz` is readiness only.
+
+```python
+import contextvars
+from starlette.responses import JSONResponse
+
+IDENTITY = contextvars.ContextVar("validated_identity", default=None)
+
+class EntraBoundary:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        if scope["path"] == "/healthz":
+            return await JSONResponse({"status": "ready"})(scope, receive, send)
+        authorization = dict(scope["headers"]).get(b"authorization", b"").decode("ascii", errors="ignore")
+        try:
+            if not authorization.startswith("Bearer "):
+                raise jwt.InvalidTokenError("Bearer token required")
+            identity = validate(authorization[7:])
+        except Exception:
+            return await JSONResponse(
+                {"error": "invalid_delegated_token"}, status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )(scope, receive, send)
+        handle = IDENTITY.set(identity)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            IDENTITY.reset(handle)
+```
+
+### Validated context → MCP handler and result
+
+Input: experiment UUID, allowlisted message and count 1–3. Output: sanitized arguments, marker and validated claims; never a bearer token.
+
+```python
+import uuid
+from typing import Literal
+import uvicorn
+from fastmcp import FastMCP
+
+mcp = FastMCP("Direct Toolbox Entra experiment", include_fastmcp_meta=False)
+
+@mcp.tool
+def probe_echo(
+    experiment_id: str,
+    message: Literal["hello-toolbox", "oauth-toolbox", "managed-toolbox"],
+    count: int = 1,
+) -> dict:
+    experiment_id = str(uuid.UUID(experiment_id))
+    if not 1 <= count <= 3:
+        raise ValueError("count must be 1-3")
+    identity = IDENTITY.get()
+    if not identity:
+        raise RuntimeError("Validated delegated identity required")
+    args = {"experiment_id": experiment_id, "message": message, "count": count}
+    return {"marker": "CUSTOM_MCP_ENTRA_VALIDATED", "arguments": args, "claims": identity}
+
+if __name__ == "__main__":
+    uvicorn.run(
+        EntraBoundary(mcp.http_app(path="/mcp", stateless_http=True, json_response=True)),
+        host="0.0.0.0", port=8000, access_log=False, log_level="warning",
+    )
+```
+
+Keep the boundary wrapper when hosting; do not expose an unwrapped `mcp.http_app`.
+The complete server adds structured audit events; retain claims only under the lab's privacy policy.
 
 **One proof exercise:** compare actual returned UUID/message/count and validated
 claims with the consenting user; retain no bearer token. Require no-token rejection:

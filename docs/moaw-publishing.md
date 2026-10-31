@@ -37,6 +37,17 @@ The workshop uses absolute GitHub implementation links because its sample code l
 outside the MOAW asset directory. Implementation links target `main`; maintain them
 alongside code changes.
 
+## Foldable deployment blocks
+
+Use native `<details>` / `<summary>` with blank lines around the enclosed Markdown.
+Each track keeps its diagram, integration code and proof exercise visible; only
+prerequisites and deployment commands are collapsed.
+MOAW's [marked options](https://github.com/microsoft/moaw/blob/main/packages/website/src/app/shared/markdown.ts)
+retain raw HTML, and its [bootstrap configuration](https://github.com/microsoft/moaw/blob/main/packages/website/src/main.ts)
+sets `sanitize: SecurityContext.NONE`, preserving these browser-native elements.
+This verifies source support, not a running frontend: browser foldability and
+all-page rendering remain unverified until the preview procedure above is run.
+
 ## Catalog submission (manual)
 
 Confirm the public source URL works and author/contact metadata is correct before
