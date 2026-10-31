@@ -1,5 +1,5 @@
 fastmcp==2.14.1
-mcp==1.27.2
+mcp==1.30.0
 pydocket==0.27.0
 pydantic==2.13.4
 pydantic-settings==2.12.0
