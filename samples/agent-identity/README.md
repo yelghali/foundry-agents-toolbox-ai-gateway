@@ -4,6 +4,79 @@ Copy this entire folder; its provisioner, hosted agent, caller and requirements
 are independently usable. `provision_toolbox.py` always uses `AgenticIdentityToken`
 and the Search audience `https://search.azure.com`, with no mode switch.
 
+For a runnable **custom FastMCP target instead of Search**, use
+`provision_custom_toolbox.py` and `custom_server.py`. The original provisioner,
+hosted agent and caller are unchanged.
+
+## Custom application-token target (B)
+
+**Offline contract verified; LIVE custom audience token acquisition is UNVERIFIED.**
+The [Toolbox authentication documentation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)
+documents agentic connections with configurable target/audience and explicitly
+rejects user tokens. This establishes the connection mechanism, not successful
+custom audience issuance for your hosted agent. There is no manual OBO.
+
+Register a single-tenant Entra API application and create its enterprise
+application/service principal. Set manifest `api.requestedAccessTokenVersion=2`.
+Use its **application/client ID GUID** for `CUSTOM_MCP_AUDIENCE`: the v2 token's
+`aud` is that GUID, not the `api://...` identifier URI. The connection requests
+that resource identifier; do not append `/.default` or reuse C's delegated setup.
+The [official claims reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
+defines the v2 audience/issuer contract.
+
+This sample uses [application ACL authorization](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-client-creds-grant-flow#access-control-lists):
+keep enterprise-app **Assignment required? = No** to permit role-less app tokens.
+The explicit service-principal `oid` allowlist is the API access grant. There is
+no delegated scope, secret, consent or Search RBAC. If policy requires roles,
+define an application-only `Mcp.Invoke` app role, assign it to each real agent
+identity through enterprise-app/Graph appRoleAssignment with admin permissions,
+and extend validation to require that role plus the allowlist. This sample
+deliberately does not enforce a role.
+
+After the standard local setup in this copied folder:
+
+```powershell
+$env:CUSTOM_MCP_AUDIENCE = "<API-application-client-ID-GUID>"
+$env:CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS = "<calling-agent-instance-object-ID>"
+python .\custom_server.py
+```
+
+Use the real calling agent instance's Entra **service-principal object ID**, not
+its blueprint/client ID, project MI or setup user. Agent identity creation and
+access must precede the call. For several allowed instances, comma-separate
+their explicit IDs; prefer one per test. Do not add a project MI to make B pass.
+The server code is identical to A's small standalone server so either folder can
+be copied independently, without lab imports.
+
+The server exposes `/healthz` at local port 8000 and authenticated streamable MCP
+at `/mcp`. Put it behind reachable HTTPS for Foundry; local HTTP is test-only.
+Keep token/body logging off and use nonsensitive experiment UUIDs. In another
+configured shell:
+
+```powershell
+$env:CUSTOM_MCP_SERVER_URL = "https://<your-custom-host>/mcp"
+$env:CUSTOM_MCP_AUDIENCE = "<same-API-client-ID-GUID>"
+$env:CONNECTION_NAME = "my-agent-custom"
+$env:TOOLBOX_NAME = "my-agent-custom-tools"
+python .\provision_custom_toolbox.py
+```
+
+The provisioner always creates `AgenticIdentityToken`. Publish a separate hosted
+version with the unchanged `hosted_agent.py` and printed `TOOLBOX_ENDPOINT`, then
+use the unchanged caller with
+`QUESTION="Call identity_probe with experiment_id <UUID>"` and
+`EXPECTED_TEXT="CUSTOM_MCP_APPLICATION_VALIDATED"`. Do not repoint a native version.
+
+**Live verification gate:** require a successful tool result with validated
+`oid` matching the actual agent instance, tenant, exact v2 issuer/audience;
+also require rejection of a different application principal and delegated user
+token. RS256 signature, expiry, issued/not-before times and required claims are
+checked. Every `scp` claim (even empty) and user `idtyp` is rejected. Only safe
+validated identifier claims are returned. HTTP 200, ARM writes or synthetic JWTs
+are not evidence of live custom token acquisition. Preserve acquisition errors,
+check tenant/resource/agent access and label live support unverified rather than
+substituting user tokens. Clean up only the newly created test resources.
+
 ## Prerequisites and role mapping
 
 - Foundry project with hosted-agent/Toolbox preview, deployed chat model and

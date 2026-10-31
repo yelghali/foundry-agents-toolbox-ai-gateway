@@ -5,3 +5,6 @@ agent-framework-core==1.20.0
 agent-framework-foundry==1.14.0
 agent-framework-openai==1.16.0
 agent-framework-foundry-hosting==1.0.0b261002
+fastmcp==2.14.1
+PyJWT[crypto]>=2.10,<3
+uvicorn>=0.30,<1

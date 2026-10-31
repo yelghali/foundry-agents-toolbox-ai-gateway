@@ -3,7 +3,7 @@ published: true
 type: workshop
 title: Choose your Foundry agent identity with Toolbox and AI Gateway
 short_title: Foundry identity lab
-description: Deploy a shared lab foundation, then independently explore project identity, agent identity, managed user access, or custom OAuth with real authorization evidence.
+description: Explore native Azure Search MCP or custom FastMCP with project, agent or user identity through Toolbox, and collect real authorization evidence.
 level: advanced
 authors:
   - Yael El Ghali
@@ -36,12 +36,16 @@ Each sample is independently copyable and does not import the root lab.
 
 | Need | Track | Data principal | Time after setup |
 | --- | --- | --- | --- |
-| Shared trusted KB access across a project | A | Project managed identity | 45 minutes |
-| Separate access for each agent | B | Calling agent instance identity | 60 minutes |
+| Shared native KB or custom API access across a project | A | Project managed identity | 45 minutes |
+| Separate native KB or custom API access for each agent | B | Calling agent instance identity | 60 minutes |
 | Search access follows the signed-in user | C native | User via managed `UserEntraToken` | 60 minutes |
 | Custom API with delegated OAuth scopes | C custom | User authorizing the OAuth connection | 75 minutes |
 
 - Alternatives, **not sequential exercises**. C custom needs no Search KB.
+- A and B each offer **native Azure Search KB MCP** and **custom FastMCP** targets.
+  The custom target is an application/agent-token API, not C's delegated OAuth server.
+  Custom A/B connection configuration and local JWT tests do not by themselves
+  establish live Toolbox custom-audience acquisition; require downstream token evidence.
 - Budget 60–90 minutes for setup/evidence/cleanup, plus deployment/RBAC propagation.
   The 150-minute estimate covers one track.
 - Reuse compatible infrastructure or choose optional foundation replay.
@@ -66,12 +70,17 @@ Each sample is independently copyable and does not import the root lab.
 | --- | --- | --- | --- |
 | A | `ProjectManagedIdentity` | `https://search.azure.com` | Project MI Search RBAC |
 | B | `AgenticIdentityToken` | `https://search.azure.com` | Calling instance Search RBAC |
+| A custom | `ProjectManagedIdentity` | Registered custom API audience | Validated project principal + role or explicit allowlist |
+| B custom | `AgenticIdentityToken` | Registered custom API audience | Validated agent principal + role or explicit allowlist; experimental until observed |
 | C native | `UserEntraToken` | `https://search.azure.com` | User Search RBAC |
 | C custom | OAuth2 authorization code + refresh | Custom API v2 audience | JWT validation + delegated scope |
 
 **Native ≠ custom OAuth:** native uses platform-managed user context; custom uses
 authorization code and `offline_access`. Neither sample captures JWT-bearer OBO.
 A user `oid` proves delegated identity, not grant type.
+For A/B custom, Toolbox must acquire the API token itself. The agent and APIM
+must not exchange tokens. An ARM connection accepting `audience` is not proof
+that the hosted identity can acquire that audience.
 
 [Full architecture](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/docs/architecture.svg)
 adds optional prompt-agent, raw Search and gateway paths.
@@ -91,6 +100,9 @@ adds optional prompt-agent, raw Search and gateway paths.
   hosted-agent/Toolbox preview access and sufficient regional quota.
 - Optional Bicep replay: existing **APIM Standard v2**; `deploy.ps1` rejects other SKUs.
   Dedicated `AIGateway` is a separate optional Terraform/portal path.
+- A/B custom: a separately registered Entra API, HTTPS-reachable application-token
+  FastMCP server, and permission to authorize the intended project/agent principal.
+  Do not configure the C delegated-only deployment to accept application tokens.
 - C custom: Azure Developer CLI supporting `azd ai connection create`,
   two Entra registrations and an HTTPS-reachable FastMCP host.
 - No account? Use approved Azure provisioning or the
@@ -132,9 +144,11 @@ Unavailable preview? Inspect offline; do not report a live authorization success
 
 ## Choose your setup
 
-- **Own infrastructure:** Foundry project/model/hosted runtime. A/B/native also need
+- **Own infrastructure:** Foundry project/model/hosted runtime. Native A/B/C also need
   a synthetic Search index, knowledge source and trusted KB. Record project endpoint/ARM ID,
-  Search ARM ID, KB MCP URL and marker. C custom instead needs its apps/HTTPS API.
+  Search ARM ID, KB MCP URL and marker. Custom A/B instead need their registered API,
+  application-token HTTPS server and exact expected principal IDs; C custom needs
+  its separate delegated OAuth apps/HTTPS API.
 - **Optional repository replay below:** creates all three cohorts in reviewed resources.
   APIM, `.config.json` and root `provision.py` are **not** standalone prerequisites.
 - Clone/install/sign in; verify the displayed tenant/subscription:
@@ -261,19 +275,24 @@ with io.BytesIO() as archive:
 
 ![A flow: invoking user to hosted agent, Toolbox project identity and Search RBAC](assets/workshop-project-identity.svg)
 
-The hosted agent calls a Toolbox endpoint; its connection supplies the project MI to Search.
-Search, not the invoking developer, authorizes retrieval.
+The hosted agent calls Toolbox; `ProjectManagedIdentity` selects the project identity.
+Choose native Search KB MCP or custom FastMCP. The downstream service, not the
+invoking developer, validates and authorizes retrieval.
 
 <details>
 <summary>Deploy A: prerequisites, roles and commands</summary>
 
 ## Prerequisites / registration
 
-- Shared project data privileges are intentional; use a trusted Search KB.
+- Shared project data privileges are intentional. The commands below deploy the
+  unchanged native target; for custom FastMCP follow the separate target setup in
+  [A's runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/README.md).
 - Resource owner enables project MI; Search admin grants **project MI object ID**
   Search Index Data Reader. Replay A already grants it: verify, do not broaden.
 - Project admin grants invoker/runtime access. **No custom OAuth apps, secret,
   callback or per-user downstream OAuth consent**; tenant sign-in policies still apply.
+  This statement applies to native Search: custom A requires an API registration,
+  but no delegated OAuth client, callback or manual agent token exchange.
 
 ## Deployment checklist
 
@@ -377,7 +396,7 @@ Input: KB URL and project connection ID. Output: a connection-authenticated tool
 
 ## Service-provided MCP contract
 
-No custom MCP server is required. Search supplies the trusted KB endpoint:
+For the native choice, no custom server is required. Search supplies the trusted KB endpoint:
 
 ```text
 https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview
@@ -385,6 +404,45 @@ Agent request: retrieve <synthetic test document> using the advertised retrieval
 Tool input/output schema: discover from this KB's MCP tools/list, not a guessed signature
 Result: actual retrieval content containing <known marker>, or authorization failure
 ```
+
+## Custom FastMCP alternative → application-token API
+
+Keep the hosted code above unchanged and use a **fresh custom-target connection
+and Toolbox**. The selected A connection remains `ProjectManagedIdentity`; its
+target becomes the HTTPS API's `/mcp` URL and its audience must match the registered
+API's actual token audience. Do not assume the Search audience works for this API.
+
+In the copied A folder, start `python .\custom_server.py` with
+`AZURE_TENANT_ID`, `CUSTOM_MCP_AUDIENCE` (the v2 API client-ID GUID), and
+`CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS` (only the project MI object ID).
+Expose its `/mcp` over HTTPS. In the provisioner's shell set
+`CUSTOM_MCP_SERVER_URL`, the same `CUSTOM_MCP_AUDIENCE`, and fresh
+`CONNECTION_NAME`/`TOOLBOX_NAME`; run `python .\provision_custom_toolbox.py`.
+Use its printed endpoint for a separate hosted version. API registration and
+ACL-only application access prerequisites are in the complete sample below.
+
+```python
+# Custom target connection shape, not an agent-side token exchange.
+custom_connection_payload = {"properties": {
+    "category": "RemoteTool", "authType": "ProjectManagedIdentity",
+    "target": os.environ["CUSTOM_MCP_SERVER_URL"],
+    "audience": os.environ["CUSTOM_MCP_AUDIENCE"],
+    "isSharedToAll": False, "metadata": {"ApiType": "Azure"},
+}}
+```
+
+The [complete A sample](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/README.md)
+provides custom provisioning and server setup. The separate application-token
+server validates JWT signature, tenant issuer, exact audience and expiry before
+authorization. It requires the expected project principal, and a configured
+application role or explicit principal allowlist; it must reject delegated-user
+tokens. Call `identity_probe(experiment_id="<synthetic UUID>")`; the tool returns
+`CUSTOM_MCP_APPLICATION_VALIDATED` and safe validated identifier claims, not JWTs
+or arbitrary queries. Logging is disabled by default; protect any captured results.
+
+**Custom proof:** request the advertised tool with a known marker, then use a
+different non-authorized project. Require a backend allow/deny and validated
+principal evidence. Local signed-token tests are not live Toolbox evidence.
 
 **One proof exercise:** retrieve the marker, then use a fresh connection to a separate
 test KB where the project MI lacks access. Require actual tool authorization denial,
@@ -406,13 +464,16 @@ Search must authorize the calling instance, not the project MI.
 
 ## Prerequisites / registration
 
-- Separate agent data privileges; trusted Search KB and supported hosted agent identity.
+- Separate agent data privileges; choose native Search KB or custom FastMCP.
+  The commands below retain the native deployment. Custom target setup is separate in
+  [B's runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/README.md).
 - Platform identity workflow creates/configures blueprint + calling instance,
   **not a manually registered confidential OAuth client**.
 - Project admin grants invoker/runtime access; Search admin grants **calling instance
   object ID**, not blueprint/client ID/version, Search Index Data Reader.
 - No custom OAuth secret/callback/per-user downstream consent. Tenant/preview admin
   may need to enable identity creation; local execution is not an equivalent test.
+  Custom B does need a separately registered API and authorized agent principals.
 
 ## Deployment checklist
 
@@ -508,7 +569,7 @@ Input: KB URL and connection ID. Output: a Toolbox tool whose connection selects
 
 ## Service-provided MCP contract
 
-Search hosts MCP; do not build your own server or manually exchange tokens.
+For the native choice, Search hosts MCP; do not manually exchange tokens.
 
 ```text
 https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview
@@ -516,6 +577,49 @@ Agent request: retrieve <synthetic test document> using the advertised retrieval
 Tool arguments: the schema advertised by this KB's MCP tools/list
 Result: retrieval content/marker if calling instance has Search access; otherwise denial
 ```
+
+## Custom FastMCP alternative → agent-token API
+
+Keep B's hosted code unchanged. A **fresh custom connection and Toolbox** uses
+`AgenticIdentityToken`, never C's `OAuth2` connection:
+
+In the copied B folder run `python .\custom_server.py` with `AZURE_TENANT_ID`,
+`CUSTOM_MCP_AUDIENCE` (the v2 API client-ID GUID), and
+`CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS` (only the actual calling agent object ID).
+Expose `/mcp` over HTTPS; set `CUSTOM_MCP_SERVER_URL`, the same audience and
+fresh connection/Toolbox names, then run `python .\provision_custom_toolbox.py`.
+Use the printed endpoint on a separate hosted version. Registration/ACL
+prerequisites are in B's complete sample.
+
+```python
+custom_connection_payload = {"properties": {
+    "category": "RemoteTool", "authType": "AgenticIdentityToken",
+    "target": os.environ["CUSTOM_MCP_SERVER_URL"],
+    "audience": os.environ["CUSTOM_MCP_AUDIENCE"],
+    "isSharedToAll": False, "metadata": {"ApiType": "Azure"},
+}}
+```
+
+Follow [B's complete custom setup](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/README.md)
+for the separate application/agent-token server. Configure exact agent principal
+IDs, not invoking user, project MI, blueprint application ID or agent name.
+An Entra agent identity is platform-created, not a hand-created confidential
+OAuth client. The custom API's actual validated `oid` mapping remains experimental
+until observed with that hosted instance and custom audience. Do not infer it
+from the successful native Search flow.
+
+The server validates signature, issuer, audience and expiry, then authorizes an
+explicit agent principal allowlist. The sample uses ACL authorization rather
+than role enforcement. Call `identity_probe` with a synthetic experiment UUID;
+the result returns only safe validated identifier claims and marker
+`CUSTOM_MCP_APPLICATION_VALIDATED`. Logging is off by default.
+Two hosted identities with only one allowed
+must produce backend allow/deny, with no project-identity fallback.
+
+**Verification gate:** accepted ARM payloads and locally minted test JWTs cannot
+prove Toolbox acquisition for custom APIs. Record actual backend claims/outcomes
+or clearly mark this custom flow **not live verified**. No agent/APIM exchange or
+delegated OAuth workaround is an acceptable substitute.
 
 **One proof exercise:** same authorized caller and Toolbox, two distinct calling
 instances; only one has Search access. Require marker vs genuine tool authorization

@@ -1,8 +1,78 @@
 # A — Project managed identity
 
-Copy this entire folder; all three Python files and `requirements.txt` are
-independent. There is no mode selection. `provision_toolbox.py` always creates
+Copy this entire folder; its scripts and `requirements.txt` are independent.
+There is no authentication-mode selection. `provision_toolbox.py` always creates
 `ProjectManagedIdentity`, with Search audience `https://search.azure.com`.
+
+For a runnable **custom FastMCP target instead of Search**, use
+`provision_custom_toolbox.py` and `custom_server.py` below. The native provisioner
+and original hosted agent/caller remain unchanged.
+
+## Custom application-token target (A)
+
+**Offline contract verified; LIVE custom audience token acquisition is UNVERIFIED.**
+The [Toolbox authentication documentation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)
+documents project identity connections with a configurable target and audience.
+That is the supported connection mechanism, not proof that this tenant's hosted
+runtime can acquire a token for this particular custom app. No manual OBO exists here.
+
+1. Register a single-tenant Entra API application and create its enterprise
+   application/service principal. Set `api.requestedAccessTokenVersion` to `2`
+   in its manifest. Use the API **application/client ID GUID** for
+   `CUSTOM_MCP_AUDIENCE`: v2 access tokens use this GUID as `aud`, not the
+   `api://...` identifier URI. The connection requests this resource identifier;
+   do not append `/.default` or copy C's delegated audience configuration.
+   See the [official access-token claims reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
+   for the v2 audience/issuer contract.
+2. This server uses [application ACL authorization](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-client-creds-grant-flow#access-control-lists).
+   Keep enterprise-app **Assignment required? = No** for this ACL-only sample,
+   so role-less application tokens can be issued. The explicit `oid` allowlist
+   grants access; no delegated scope, OAuth secret, consent, Search RBAC or
+   client-ID-only permission is required. If your organization requires app
+   roles/assignment, define an application-only role (for example `Mcp.Invoke`),
+   assign it to the project MI via enterprise-app/Graph appRoleAssignment with
+   admin permissions, and extend validation to require that role as well as
+   the allowlist. This sample deliberately does not enforce a role.
+3. Obtain the **project managed identity service-principal object ID**, not the
+   API app/client ID or setup user's ID, and allow only it on this A server.
+
+After the normal local setup, run in the copied scenario folder:
+
+```powershell
+$env:CUSTOM_MCP_AUDIENCE = "<API-application-client-ID-GUID>"
+$env:CUSTOM_MCP_EXPECTED_PRINCIPAL_IDS = "<project-MI-object-ID>"
+python .\custom_server.py
+```
+
+It serves unauthenticated readiness at `http://localhost:8000/healthz` and
+authenticated streamable HTTP at `/mcp`. Use a reachable HTTPS deployment or
+trusted HTTPS ingress for Foundry; localhost is only for local tests. No token
+is acquired by this server. Keep access/body logging off; use nonsensitive UUIDs.
+In a second configured shell, choose fresh connection/Toolbox names:
+
+```powershell
+$env:CUSTOM_MCP_SERVER_URL = "https://<your-custom-host>/mcp"
+$env:CUSTOM_MCP_AUDIENCE = "<same-API-client-ID-GUID>"
+$env:CONNECTION_NAME = "my-project-custom"
+$env:TOOLBOX_NAME = "my-project-custom-tools"
+python .\provision_custom_toolbox.py
+```
+
+This creates fixed `ProjectManagedIdentity` auth and custom audience. Publish a
+separate hosted version using the unchanged `hosted_agent.py` and the printed
+`TOOLBOX_ENDPOINT`; do not repoint an existing native version. Invoke using the
+unchanged caller with `QUESTION="Call identity_probe with experiment_id <UUID>"`
+and `EXPECTED_TEXT="CUSTOM_MCP_APPLICATION_VALIDATED"`.
+
+**Live verification gate:** require a successful MCP tool result, validated
+`tid`/`oid` matching the project MI, exact v2 issuer/audience, and negative tests
+for a non-allowlisted application principal and a delegated user token. The server
+checks RS256 signature, expiry, issued/not-before times and required claims,
+rejects every `scp` claim (including empty) and user `idtyp`, and returns only safe
+identifier claims. HTTP 200, connection creation or synthetic JWT tests do not
+prove managed custom token acquisition. If acquisition fails, retain the error,
+check resource audience/tenant/identity access, and label live support unverified;
+never replace the flow with caller/user tokens. Clean up only your new resources.
 
 ## Prerequisites and role mapping
 

@@ -11,6 +11,9 @@ Start with [workshop.md](workshop.md): introduction, architecture, shared infras
 setup, then **choose one independent track**—project identity, agent identity,
 managed user access to a trusted KB, or custom OAuth with FastMCP. Each includes
 code exploration, exercises, allow/deny evidence and cleanup.
+Independent [A/B samples](samples.md) support both native Search and custom
+application-token FastMCP targets, with explicit principal allowlists. Custom
+A/B live token acquisition remains unverified; local contracts do not prove it.
 See [MOAW preview and publication](docs/moaw-publishing.md) for the hosted reader
 URL and catalog submission instructions.
 
