@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="300" viewBox="0 0 1100 300" role="img" aria-labelledby="title desc">
+  <title id="title">A: project managed identity retrieval flow</title>
+  <desc id="desc">An invoking user calls a hosted agent. The agent uses Toolbox, which selects ProjectManagedIdentity. Search validates a Search-audience token and the project managed identity's Search Index Data Reader role. No custom OAuth application or per-user tool consent is required.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#245a81"/></marker></defs>
+  <rect width="1100" height="300" fill="#f5f7fb"/>
+  <g fill="#fff" stroke="#245a81" stroke-width="2">
+    <rect x="20" y="100" width="170" height="100" rx="10"/>
+    <rect x="250" y="100" width="200" height="100" rx="10"/>
+    <rect x="510" y="100" width="250" height="100" rx="10"/>
+    <rect x="830" y="100" width="250" height="100" rx="10"/>
+  </g>
+  <g fill="none" stroke="#245a81" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M190 150H248"/><path d="M450 150H508"/><path d="M760 150H828"/>
+  </g>
+  <g font-family="Segoe UI, sans-serif" fill="#142e45" text-anchor="middle">
+    <text x="550" y="35" font-size="23">A — Shared project data access</text>
+    <text x="105" y="133" font-size="18">1. Invoking user</text>
+    <text x="105" y="162" font-size="14">Caller token:</text><text x="105" y="182" font-size="14">ai.azure.com</text>
+    <text x="350" y="133" font-size="18">2. Hosted agent</text>
+    <text x="350" y="163" font-size="14">FoundryToolbox</text><text x="350" y="183" font-size="14">Model access is separate</text>
+    <text x="635" y="133" font-size="18">3. Toolbox connection</text>
+    <text x="635" y="163" font-size="14">ProjectManagedIdentity</text><text x="635" y="183" font-size="14">Token: search.azure.com</text>
+    <text x="955" y="133" font-size="18">4. Trusted Search KB</text>
+    <text x="955" y="163" font-size="14">Project MI object ID</text><text x="955" y="183" font-size="14">Search Index Data Reader</text>
+    <text x="550" y="242" font-size="16">Search result returns through Toolbox and the hosted agent to the user.</text>
+    <text x="550" y="272" font-size="16">No custom OAuth app registration, client secret or per-user downstream consent.</text>
+  </g>
+</svg>

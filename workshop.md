@@ -135,6 +135,21 @@ Do not run Terraform and Bicep against the same lab resources without deciding o
 Do not assume Azure subscription ownership grants Entra application permissions.
 Use actual Entra object IDs for RBAC, not project ARM IDs, client IDs or agent names.
 
+## Who creates identities, assigns roles and approves consent?
+
+| Track | App/identity creation owner | Project/runtime authorization owner | Data authorization owner | User/admin consent |
+| --- | --- | --- | --- | --- |
+| A | Azure resource owner enables the project's managed identity; **no custom OAuth app registration** | Project administrator grants the invoker and hosted runtime project/model/Toolbox access | Search RBAC administrator grants the **project MI object ID** Search Index Data Reader | No per-user downstream tool OAuth consent; ordinary tenant sign-in policies still apply |
+| B | Foundry's supported agent identity workflow creates/configures the blueprint and calling instance; **not a manually registered OAuth client** | Project administrator grants the invoker and calling runtime project/model/Toolbox access | Search RBAC administrator grants **each calling instance object ID**, not the blueprint, Search Index Data Reader | No per-user downstream OAuth consent; tenant/preview administrators may need to enable the platform identity workflow |
+| C native | Existing signed-in user and platform-managed trusted Search connection; **no customer custom OAuth app/secret** | Project administrator grants invoker/runtime project/model/Toolbox access and enables supported user context | Search RBAC administrator grants the **eventual invoking user object ID** Search Index Data Reader | User completes any platform connection authorization; tenant restrictions may require administrator approval |
+| C custom | Entra application administrator/developer creates **API resource app + separate confidential OAuth client app** | Project administrator grants invoker/runtime project/model/Toolbox access; provisioner configures OAuth connection | API owner exposes `access_as_user` and enforces JWT/scope checks; Entra administrator approves permissions/assignment as needed | OAuth client requests delegated API permission; user authorizes the connection; admin consent is required where tenant policy or scope consent settings demand it |
+
+**Project access is not data access.** Azure AI User on the project does not grant
+Search Index Data Reader. An OAuth delegated scope is not a Search role. A blueprint
+is an agent identity configuration, not the calling instance's RBAC principal.
+The standalone provisioners create connections and Toolbox versions only: none
+creates Entra apps, grants consent, assigns roles or deploys the hosted runtime.
+
 ## Costs and sensitive data
 
 The foundation creates **three Basic Search services**, three projects and three
@@ -157,6 +172,20 @@ the code offline; do not call that a live authorization success.
 ---
 
 # Deploy the shared foundation
+
+## Choose your own-tenant setup or replay the repository lab
+
+**Reusable setup:** use your own Foundry account/project, chat model and supported
+hosted runtime. For A/B/C native, first create a Search index with synthetic data,
+knowledge source and trusted knowledge base through your approved Search process.
+Record the project ARM ID, project endpoint, Search service ARM ID and actual KB
+MCP URL. Follow only the selected standalone runbook; `.config.json`, three cohorts,
+APIM and `provision.py` are **not** prerequisites. C custom instead needs the two
+Entra apps and HTTPS API described in its track; it needs no Search resources.
+
+**Repository lab replay:** the commands below create the existing multi-cohort
+foundation and its marker data. They are optional, not an independent sample's
+deployment command, and must target your own reviewed subscription/resources.
 
 Run from a fresh clone on your workstation:
 
@@ -228,9 +257,98 @@ full showcase, not a shortcut that leaves unrelated tracks untouched.
 success is not proof that hosted retrieval or downstream authorization works.
 Now jump directly to your selected track.
 
+## Explicit hosted deployment for any selected standalone sample
+
+Run this **from the selected sample folder**, after its provisioner has printed
+`TOOLBOX_ENDPOINT` and its venv is active. Provisioning a Toolbox is not publishing
+an agent. Set these values locally for deployment (local environment variables are
+not automatically forwarded to a remote runtime):
+
+```powershell
+$env:TOOLBOX_ENDPOINT = "<endpoint printed by this sample provisioner>"
+$env:AZURE_AI_MODEL_DEPLOYMENT_NAME = "<existing chat model deployment>"
+$env:AGENT_NAME = "<new hosted agent name in your project>"
+```
+
+The following copyable publishing code uses the same
+`create_version_from_code`, `HostedAgentDefinition` and `CodeConfiguration` API
+as [the repository publisher](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/publish_agents.py).
+It packages **only this sample**, uploads source and requests a Python 3.13 remote
+build. It does not run the root multi-agent publisher or deploy infrastructure.
+Save as `publish_hosted.py` in your copied sample folder, then run
+`python .\publish_hosted.py`:
+
+```python
+import io
+import os
+import zipfile
+from pathlib import Path
+
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import (
+    CodeConfiguration, HostedAgentDefinition, ProtocolVersionRecord,
+)
+from azure.identity import AzureCliCredential
+
+source = Path(__file__).resolve().parent
+with io.BytesIO() as archive:
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for filename in ("hosted_agent.py", "requirements.txt"):
+            bundle.write(source / filename, filename)
+    archive.seek(0)
+    credential = AzureCliCredential(tenant_id=os.environ["AZURE_TENANT_ID"])
+    with AIProjectClient(
+        endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"], credential=credential,
+    ) as project:
+        version = project.agents.create_version_from_code(
+            agent_name=os.environ["AGENT_NAME"], code=archive,
+            definition=HostedAgentDefinition(
+                cpu="0.5", memory="1Gi",
+                code_configuration=CodeConfiguration(
+                    runtime="python_3_13",
+                    entry_point=["python", "hosted_agent.py"],
+                    dependency_resolution="remote_build",
+                ),
+                protocol_versions=[
+                    ProtocolVersionRecord(protocol="responses", version="2.0.0"),
+                ],
+                environment_variables={
+                    key: os.environ[key] for key in (
+                        "FOUNDRY_PROJECT_ENDPOINT",
+                        "AZURE_AI_MODEL_DEPLOYMENT_NAME", "TOOLBOX_ENDPOINT",
+                    )
+                },
+            ),
+        )
+        print("Agent version:", version.version)
+        print("Deployment status:", version.status)
+```
+
+In Foundry **Agents**, select this agent/version, check build/start diagnostics
+and wait for **Active**. A returned version number is not readiness. Select
+**Identity** to obtain the actual calling instance's Entra object ID; the project
+administrator must grant its required project/model/Toolbox permissions (the lab
+publisher grants Azure AI User at the project scope). B additionally needs its
+instance's Search data role. Do not silently substitute a different managed identity.
+Review the [official hosting workflow](https://learn.microsoft.com/azure/foundry/agents/quickstarts/quickstart-foundry-iq-hosted-agent)
+if your preview uses different deployment/identity configuration. Its `azd deploy`
+requires that quickstart's manifests; do not run it in these bare sample folders
+or run its provisioning hooks against your existing KB.
+
+Set `AGENT_VERSION` to the Active version printed above before the selected
+sample's invocation step. An existing correctly configured Active version can
+skip publishing entirely.
+
 ---
 
 # A: project managed identity
+
+![A flow: invoking user to hosted agent, Toolbox project identity and Search RBAC](assets/workshop-project-identity.svg)
+
+**Flow:** user token (`ai.azure.com`) invokes the hosted agent → runtime calls
+Toolbox → `ProjectManagedIdentity` obtains the project's Search-audience token →
+Search checks the project MI's data role → retrieval result returns to the caller.
+The invoking user does not become the Search principal.
 
 Use A when sharing data access across the project is intentional.
 Open the [complete A runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/README.md)
@@ -243,14 +361,89 @@ role assignment, hosting and invocation steps.
 3. Run `python .\provision_toolbox.py`. Inspect the printed Toolbox endpoint.
 4. Assign Search Index Data Reader to the project's actual managed identity.
    The root A foundation already grants this on A Search; verify rather than broaden it.
-5. Publish `hosted_agent.py` with `requirements.txt` for Python 3.13,
+5. Use **Explicit hosted deployment** on the preceding page to publish
+   `hosted_agent.py` with `requirements.txt` for Python 3.13,
    entry point `python hosted_agent.py`, Responses protocol `2.0.0`.
    Set the three hosted environment values from the runbook. Follow the linked
    official Foundry hosting workflow and wait for an **Active** version.
-6. Set `AGENT_NAME`, `AGENT_VERSION`, `QUESTION` and `EXPECTED_TEXT` to the seeded
-   marker and run `python .\invoke_hosted.py`.
+6. Set the hosted `AGENT_NAME` and Active `AGENT_VERSION`, ask for the synthetic
+   document in `QUESTION`, set `EXPECTED_TEXT` to its known marker and run
+   `python .\invoke_hosted.py`.
+
+For steps 1–3, from your clone (replace every placeholder with your own values):
+
+```powershell
+Set-Location .\samples\project-identity
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r .\requirements.txt
+az login --tenant "<tenant-id>"
+$env:AZURE_TENANT_ID = "<tenant-id>"
+$env:FOUNDRY_PROJECT_ENDPOINT = "https://<account>.services.ai.azure.com/api/projects/<project>"
+$env:FOUNDRY_PROJECT_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
+$env:MCP_SERVER_URL = "https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview"
+$env:CONNECTION_NAME = "my-project-kb"
+$env:TOOLBOX_NAME = "my-project-tools"
+python .\provision_toolbox.py
+```
+
+After steps 4–5 (data role, explicit remote publishing and Active status):
+
+```powershell
+$env:AGENT_NAME = "<hosted-agent-name>"
+$env:AGENT_VERSION = "<active-version>"
+$env:QUESTION = "Use the knowledge-base retrieval tool to find <synthetic test document>."
+$env:EXPECTED_TEXT = "<known marker in that document>"
+python .\invoke_hosted.py
+```
 
 ## Code walkthrough and experiment
+
+This is the runnable runtime shape from
+[A's hosted_agent.py](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/project-identity/hosted_agent.py).
+Run only in the configured hosted environment for the identity test:
+
+```python
+import asyncio
+import os
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
+from azure.identity import DefaultAzureCredential
+
+async def main():
+    credential = DefaultAzureCredential()
+    agent = Agent(
+        client=FoundryChatClient(
+            project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
+            model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
+            credential=credential,
+        ),
+        tools=FoundryToolbox(
+            credential, name="retrieval", url=os.environ["TOOLBOX_ENDPOINT"],
+        ),
+        instructions=(
+            "Use the Toolbox tool requested by the user. Return its actual result. "
+            "Never invent a result, marker or identity. Report actual tool errors."
+        ),
+        default_options={"store": False},
+    )
+    await ResponsesHostServer(agent).run_async()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The Search RBAC administrator runs this after verifying the project's object ID:
+
+```powershell
+$env:SEARCH_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Search/searchServices/<search>"
+$env:DATA_PRINCIPAL_OBJECT_ID = "<project-managed-identity-object-id>"
+az role assignment create --assignee-object-id $env:DATA_PRINCIPAL_OBJECT_ID --assignee-principal-type ServicePrincipal --role "Search Index Data Reader" --scope $env:SEARCH_RESOURCE_ID
+```
+
+No custom OAuth app registration, callback, client secret or per-user tool consent
+is required. Do not add custom OAuth merely to let a second user invoke A.
 
 In `provision_toolbox.py`, find `ProjectManagedIdentity` and the Search audience.
 In `hosted_agent.py`, trace `FoundryChatClient`, `FoundryToolbox` and
@@ -274,13 +467,21 @@ Continue to evidence and cleanup; B and C are optional.
 
 # B: calling agent identity
 
+![B flow: user invocation, hosted calling identity and instance-specific Search role](assets/workshop-agent-identity.svg)
+
+**Flow:** invoking user reaches the hosted agent → hosted context identifies the
+calling instance → Toolbox's `AgenticIdentityToken` uses that instance's token
+(`search.azure.com`) → Search checks **that instance's** data role. Project
+permission enables runtime access; it does not authorize Search retrieval.
+
 Use B when agents in the same project must have different data privileges.
 Follow the [complete B runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/README.md)
 in `samples\agent-identity`.
 
 1. Install the sample dependencies and configure tenant/project/KB values.
 2. Provision fresh connection and Toolbox names with `python .\provision_toolbox.py`.
-3. Publish the hosted package using the runbook's Python 3.13 entry point,
+3. Use **Explicit hosted deployment** to publish the selected hosted package
+   using the runbook's Python 3.13 entry point,
    Responses protocol and hosted environment. Configure the calling agent's
    agentic identity through the supported Foundry identity workflow.
 4. Obtain the **calling agent instance's Entra object ID**, not a blueprint/client
@@ -288,7 +489,72 @@ in `samples\agent-identity`.
 5. After RBAC propagation and Active hosting, pin the version and invoke the caller
    with your synthetic marker.
 
+For steps 1–2, from the clone root:
+
+```powershell
+Set-Location .\samples\agent-identity
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r .\requirements.txt
+az login --tenant "<tenant-id>"
+$env:AZURE_TENANT_ID = "<tenant-id>"
+$env:FOUNDRY_PROJECT_ENDPOINT = "https://<account>.services.ai.azure.com/api/projects/<project>"
+$env:FOUNDRY_PROJECT_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
+$env:MCP_SERVER_URL = "https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview"
+$env:CONNECTION_NAME = "my-agent-kb"
+$env:TOOLBOX_NAME = "my-agent-tools"
+python .\provision_toolbox.py
+```
+
+After steps 3–4 (publish, configure platform instance identity, grant roles):
+
+```powershell
+$env:AGENT_NAME = "<hosted-agent-name>"
+$env:AGENT_VERSION = "<active-version>"
+$env:QUESTION = "Use the knowledge-base retrieval tool to find <synthetic test document>."
+$env:EXPECTED_TEXT = "<known marker in that document>"
+python .\invoke_hosted.py
+```
+
 ## Code walkthrough and experiment
+
+These declarations are the B provisioner's connection payload and SDK tool
+shape, with imports and environment context. They do not deploy a runtime or
+assign roles; run the complete
+[B provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/agent-identity/provision_toolbox.py)
+for the authenticated ARM PUT and Toolbox create/update:
+
+```python
+import os
+from azure.ai.projects.models import MCPToolboxTool
+
+target = os.environ["MCP_SERVER_URL"]
+project_id = os.environ["FOUNDRY_PROJECT_RESOURCE_ID"].rstrip("/")
+connection_id = f"{project_id}/connections/{os.environ['CONNECTION_NAME']}"
+connection_payload = {"properties": {
+    "category": "RemoteTool", "authType": "AgenticIdentityToken",
+    "target": target, "audience": "https://search.azure.com",
+    "isSharedToAll": False, "metadata": {"ApiType": "Azure"},
+}}
+tool = MCPToolboxTool(
+    name="retrieve", server_label="knowledge", server_url=target,
+    project_connection_id=connection_id, require_approval="never",
+)
+```
+
+In Foundry **Agents → your agent → Identity**, obtain the calling instance object
+ID after platform identity creation. A blueprint is not a manually registered
+confidential OAuth app, and its client/blueprint ID is not the data principal.
+The RBAC administrator then runs:
+
+```powershell
+$env:SEARCH_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Search/searchServices/<search>"
+$env:DATA_PRINCIPAL_OBJECT_ID = "<calling-agent-instance-object-id>"
+az role assignment create --assignee-object-id $env:DATA_PRINCIPAL_OBJECT_ID --assignee-principal-type ServicePrincipal --role "Search Index Data Reader" --scope $env:SEARCH_RESOURCE_ID
+```
+
+Separately grant the runtime its required project/model/Toolbox access. No custom
+OAuth client secret/callback or per-user downstream consent is needed for B.
 
 Locate `AgenticIdentityToken` and `https://search.azure.com` in the provisioner.
 The hosted/caller structure resembles A, but connection identity selection changes
@@ -314,6 +580,13 @@ Continue to evidence and cleanup; user tracks are optional.
 
 # C native: managed user context and a trusted Search KB
 
+![C native flow: signed-in user context through Toolbox to trusted Search](assets/workshop-native-user.svg)
+
+**Flow:** signed-in user's `ai.azure.com` caller token invokes the hosted agent →
+`ResponsesHostServer` supplies user context → Toolbox's native `UserEntraToken`
+connection targets the trusted Search KB → Search checks the **user's** Search
+data role. No custom authorization/token endpoints are configured by this sample.
+
 Use this path when Search authorization must follow the invoking user.
 Follow the [complete native user runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/trusted-kb/README.md)
 in `samples\user-identity\trusted-kb`.
@@ -322,14 +595,83 @@ in `samples\user-identity\trusted-kb`.
 2. Run the standalone provisioner with fresh connection/Toolbox names.
 3. Grant Search Index Data Reader to the intended **invoking user's Entra object ID**,
    not automatically the provisioning administrator.
-4. Publish the Python 3.13 hosted package and set the runbook's model/project/Toolbox
+4. Use **Explicit hosted deployment** to publish the Python 3.13 hosted package
+   and set the runbook's model/project/Toolbox
    environment. The hosted runtime must support user context.
 5. Complete any Foundry connection/user authorization challenge in the browser as
    the intended user. Tenant policy may require admin approval. Retry with a fresh
    invocation; do not programmatically follow consent URLs.
 6. Invoke an Active pinned version and require the synthetic marker.
 
+For steps 1–2, from the clone root:
+
+```powershell
+Set-Location .\samples\user-identity\trusted-kb
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r .\requirements.txt
+az login --tenant "<tenant-id>"
+$env:AZURE_TENANT_ID = "<tenant-id>"
+$env:FOUNDRY_PROJECT_ENDPOINT = "https://<account>.services.ai.azure.com/api/projects/<project>"
+$env:FOUNDRY_PROJECT_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
+$env:MCP_SERVER_URL = "https://<search>.search.windows.net/knowledgebases/<kb>/mcp?api-version=2026-05-01-preview"
+$env:CONNECTION_NAME = "my-user-kb"
+$env:TOOLBOX_NAME = "my-user-tools"
+python .\provision_toolbox.py
+```
+
+After steps 3–5, sign in as the intended user, not the provisioning administrator:
+
+```powershell
+az login --tenant "<tenant-id>"
+$env:AGENT_NAME = "<hosted-agent-name>"
+$env:AGENT_VERSION = "<active-version>"
+$env:QUESTION = "Use the knowledge-base retrieval tool to find <synthetic test document>."
+$env:EXPECTED_TEXT = "<known marker in that document>"
+python .\invoke_hosted.py
+```
+
 ## Code walkthrough and experiment
+
+The following is the native provisioner's connection/tool configuration, not a
+manual user-token exchange. Use the complete
+[native provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/trusted-kb/provision_toolbox.py)
+to submit it and publish the Toolbox:
+
+```python
+import os
+from azure.ai.projects.models import MCPToolboxTool
+
+target = os.environ["MCP_SERVER_URL"]  # Trusted Search KB MCP URL
+project_id = os.environ["FOUNDRY_PROJECT_RESOURCE_ID"].rstrip("/")
+connection_id = f"{project_id}/connections/{os.environ['CONNECTION_NAME']}"
+connection_payload = {"properties": {
+    "category": "RemoteTool", "authType": "UserEntraToken",
+    "target": target, "audience": "https://search.azure.com",
+    "isSharedToAll": False, "metadata": {"ApiType": "Azure"},
+}}
+tool = MCPToolboxTool(
+    name="retrieve", server_label="knowledge", server_url=target,
+    project_connection_id=connection_id, require_approval="never",
+)
+```
+
+Sign in as the eventual invocation user and obtain their object ID. A separately
+authorized Search RBAC administrator assigns this role; do not accidentally grant
+the provisioning administrator's identity:
+
+```powershell
+az login --tenant "<tenant-id>"
+az ad signed-in-user show --query id -o tsv
+$env:DATA_PRINCIPAL_OBJECT_ID = "<intended-invoking-user-object-id>"
+$env:SEARCH_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Search/searchServices/<search>"
+az role assignment create --assignee-object-id $env:DATA_PRINCIPAL_OBJECT_ID --assignee-principal-type User --role "Search Index Data Reader" --scope $env:SEARCH_RESOURCE_ID
+```
+
+No customer custom OAuth API/client registration, secret or callback is required.
+This does **not** promise unrestricted tenant consent: platform connection
+authorization and sign-in restrictions may require an administrator's approval.
+Complete the intended user's challenge through Foundry, then invoke afresh.
 
 Locate `UserEntraToken` and Search audience in `provision_toolbox.py`.
 The hosted agent does not implement OAuth exchange. `DefaultAzureCredential`
@@ -355,13 +697,34 @@ Continue to evidence and cleanup; custom OAuth is an alternative, not the next s
 
 # C custom: OAuth2 Toolbox to your FastMCP API
 
+![C custom flow: browser authorization code and refresh to a JWT-validating API](assets/workshop-custom-oauth.svg)
+
+**Flow:** user authorizes the connection in the browser → Entra issues an
+authorization code to Toolbox's registered callback → Toolbox exchanges it using
+the confidential client's credentials and may refresh with `offline_access` →
+Toolbox calls HTTPS `/mcp` with an API-audience delegated token → FastMCP's boundary
+validates the token before executing `probe_echo`. The agent/server implements
+neither a manual JWT-bearer OBO exchange nor an OAuth authorization server.
+
 Use this path for a custom API with delegated authorization, not for replacing
 the native Search connection. Follow the [complete custom OAuth runbook](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/README.md)
 in `samples\user-identity\custom-oauth`.
 
-1. Configure an Entra **API app** for v2 tokens and expose delegated
-   `access_as_user`. Configure a separate **OAuth client app** with that delegated
-   permission and a secret. Obtain tenant/admin consent as policy requires.
+1. An authorized Entra application developer/admin creates two single-tenant
+   registrations in **Entra ID → App registrations → New registration**:
+   - **API resource app:** record its Application (client) ID. In its manifest,
+     set `api.requestedAccessTokenVersion` to `2`. Under **Expose an API**, set
+     `api://<API-application-id>` and add the delegated scope `access_as_user`;
+     choose who may consent according to tenant policy.
+   - **Confidential OAuth client app:** record its distinct Application (client)
+     ID. Under **API permissions → Add a permission → My APIs**, select the API
+     app and delegated `access_as_user`. Under **Certificates & secrets**, create
+     a short-lived client secret and securely retain the **value**, not secret ID.
+     Do not guess a redirect URI yet; provisioning discovers the platform callback.
+   - An authorized tenant admin grants consent where required by tenant policy
+     or the API scope's consent setting, and configures user assignment if required.
+     Admin permission consent and the intended user's connection authorization
+     are separate checks; an Azure subscription role does not grant either.
 2. In a separate server venv, install `server-requirements.txt`, set
    `ENTRA_TENANT_ID` and the actual v2 `ENTRA_AUDIENCE` (normally the API client ID
    GUID), then run `python .\server.py`.
@@ -374,11 +737,114 @@ in `samples\user-identity\custom-oauth`.
 5. Use the runbook's secure interactive secret entry and `try/finally` cleanup,
    then run `python .\provision_toolbox.py`. Register the **printed callback exactly**
    as a Web redirect URI on the OAuth client app.
-6. Complete the connection's browser consent as the intended user. Publish the
-   hosted package, wait for Active, and invoke `probe_echo` with the runbook's
+6. In Foundry, open this connection's user authorization/consent flow as the
+   intended user; verify the client, API and requested permissions before approval.
+   Complete administrator approval if required. Use **Explicit hosted deployment**
+   for the agent package (not `server.py`), wait for Active, and invoke `probe_echo` with the runbook's
    nonsensitive UUID/message/count experiment and expected validation marker.
 
+For steps 2–3, in the selected folder's separate server terminal:
+
+```powershell
+Set-Location .\samples\user-identity\custom-oauth
+python -m venv .server-venv
+.\.server-venv\Scripts\Activate.ps1
+python -m pip install -r .\server-requirements.txt
+$env:ENTRA_TENANT_ID = "<tenant-id>"
+$env:ENTRA_AUDIENCE = "<API-application-client-id-GUID>"
+python .\server.py
+```
+
+Keep this process running for the test or deploy those server files to your
+approved HTTPS host with the same server environment. Foundry must reach
+`https://<your-custom-server>/mcp`; a local terminal alone does not provide it.
+
+For steps 4–5, in a second terminal, from the same sample folder:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r .\requirements.txt
+az login --tenant "<tenant-id>"
+azd auth login --tenant-id "<tenant-id>"
+$env:AZURE_TENANT_ID = "<tenant-id>"
+$env:FOUNDRY_PROJECT_ENDPOINT = "https://<account>.services.ai.azure.com/api/projects/<project>"
+$env:FOUNDRY_PROJECT_RESOURCE_ID = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
+$env:MCP_SERVER_URL = "https://<your-custom-server>/mcp"
+$env:CONNECTION_NAME = "my-custom-oauth"
+$env:TOOLBOX_NAME = "my-custom-tools"
+$env:OAUTH_CLIENT_ID = "<OAuth-client-application-id>"
+$env:OAUTH_SCOPE = "api://<API-application-id>/access_as_user"
+$secret = Read-Host "OAuth client secret value" -AsSecureString
+$env:OAUTH_CLIENT_SECRET = [System.Net.NetworkCredential]::new("", $secret).Password
+try { python .\provision_toolbox.py }
+finally { Remove-Item Env:\OAUTH_CLIENT_SECRET; $secret = $null }
+```
+
+After exact callback registration, connection authorization and hosted publishing:
+
+```powershell
+$env:AGENT_NAME = "<hosted-agent-name>"
+$env:AGENT_VERSION = "<active-version>"
+$env:QUESTION = 'Call probe_echo with experiment_id "11111111-2222-4333-8444-555555555555", message "oauth-toolbox", count 1. Return the real result.'
+$env:EXPECTED_TEXT = "CUSTOM_MCP_ENTRA_VALIDATED"
+python .\invoke_hosted.py
+```
+
 ## Code walkthrough and experiment
+
+The provider endpoints are explicitly configured by the
+[custom provisioner](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/provision_toolbox.py):
+
+```python
+import os
+
+base = f"https://login.microsoftonline.com/{os.environ['AZURE_TENANT_ID']}/oauth2/v2.0/"
+authorization_url = base + "authorize"
+token_url = base + "token"
+refresh_url = base + "token"
+scopes = os.environ["OAUTH_SCOPE"] + " offline_access"
+```
+
+It passes these to `azd ai connection create --auth-type oauth2`, then reads
+`properties.redirectUrl` from the created ARM connection. **Register that exact
+discovered URI as a Web redirect on the OAuth client**, not on the API resource
+app. This is callback discovery from the platform; the server does not implement
+automatic OAuth provider discovery. Entra's issuer/JWKS URLs are tenant-specific,
+and the sample explicitly configures the provider endpoints.
+
+The server's validation core below is independently copyable with PyJWT from
+`server-requirements.txt`; its caller is the middleware in
+[server.py](https://github.com/yelghali/foundry-agents-toolbox-ai-gateway/blob/main/samples/user-identity/custom-oauth/server.py),
+which rejects missing/invalid tokens before entering the tool:
+
+```python
+import os
+import jwt
+
+TENANT = os.environ["ENTRA_TENANT_ID"]
+AUDIENCE = os.environ["ENTRA_AUDIENCE"]
+ISSUER = f"https://login.microsoftonline.com/{TENANT}/v2.0"
+KEYS = jwt.PyJWKClient(
+    f"https://login.microsoftonline.com/{TENANT}/discovery/v2.0/keys",
+    cache_keys=True, lifespan=3600, timeout=15,
+)
+
+def validate(token):
+    key = KEYS.get_signing_key_from_jwt(token).key
+    claims = jwt.decode(
+        token, key, algorithms=["RS256"], audience=AUDIENCE, issuer=ISSUER,
+        options={"require": ["exp", "iat", "nbf", "iss", "aud", "tid", "oid", "scp"]},
+        leeway=30,
+    )
+    if claims["tid"] != TENANT or "access_as_user" not in claims["scp"].split():
+        raise jwt.InvalidTokenError("Required tenant or delegated scope missing")
+    return {name: claims.get(name) for name in ("tid", "oid", "aud", "iss", "scp", "azp", "ver")}
+```
+
+This verifies signature, issuer, audience, token timing, tenant and delegated
+scope. `azp` and `ver` are returned claims, **not additional allowlist checks**;
+do not describe this demo as enforcing a specific authorized client list.
 
 In the provisioner, trace `azd ai connection create` and OAuth2 connection creation.
 In `server.py`, trace signature/JWKS validation, issuer, tenant, audience, expiry

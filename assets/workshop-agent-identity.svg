@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="330" viewBox="0 0 1100 330" role="img" aria-labelledby="title desc">
+  <title id="title">B: calling agent instance identity retrieval flow</title>
+  <desc id="desc">A user invokes the hosted agent. Hosted context supplies its calling instance identity to Toolbox's AgenticIdentityToken connection. Search checks the calling instance object ID's data role, not the blueprint or project identity. The platform agent blueprint is not a manually registered OAuth client.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#245a81"/></marker></defs>
+  <rect width="1100" height="330" fill="#f5f7fb"/>
+  <g fill="#fff" stroke="#245a81" stroke-width="2">
+    <rect x="20" y="100" width="170" height="100" rx="10"/>
+    <rect x="250" y="100" width="210" height="100" rx="10"/>
+    <rect x="520" y="100" width="240" height="100" rx="10"/>
+    <rect x="830" y="100" width="250" height="100" rx="10"/>
+  </g>
+  <g fill="none" stroke="#245a81" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M190 150H248"/><path d="M460 150H518"/><path d="M760 150H828"/>
+  </g>
+  <g font-family="Segoe UI, sans-serif" fill="#142e45" text-anchor="middle">
+    <text x="550" y="35" font-size="23">B — Separate data access for each calling agent</text>
+    <text x="105" y="133" font-size="18">1. Invoking user</text>
+    <text x="105" y="162" font-size="14">Caller token:</text><text x="105" y="182" font-size="14">ai.azure.com</text>
+    <text x="355" y="133" font-size="18">2. Hosted instance</text>
+    <text x="355" y="163" font-size="14">Platform agent identity</text><text x="355" y="183" font-size="14">Hosted calling context</text>
+    <text x="640" y="133" font-size="18">3. Toolbox connection</text>
+    <text x="640" y="163" font-size="14">AgenticIdentityToken</text><text x="640" y="183" font-size="14">Token: search.azure.com</text>
+    <text x="955" y="133" font-size="18">4. Trusted Search KB</text>
+    <text x="955" y="163" font-size="14">Calling instance object ID</text><text x="955" y="183" font-size="14">Search Index Data Reader</text>
+    <text x="550" y="240" font-size="16">Project/model/Toolbox permission is distinct from the instance's Search data role.</text>
+    <text x="550" y="270" font-size="16">Blueprint ≠ calling instance RBAC principal ≠ manually registered OAuth client.</text>
+    <text x="550" y="300" font-size="16">Negative control: same user and Toolbox, different instance without the Search role.</text>
+  </g>
+</svg>
