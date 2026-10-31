@@ -1,5 +1,19 @@
 # Foundry agents identity lab
 
+## Hands-on workshop (MOAW)
+
+**[Open the lab in MOAW](https://aka.ms/ws?src=gh:yelghali/foundry-agents-toolbox-ai-gateway/main/)**
+
+The hosted reader loads `workshop.md` from the public `main` branch. Publish the
+workshop and assets there before using this link; local edits are not served.
+
+Start with [workshop.md](workshop.md): introduction, architecture, shared infrastructure
+setup, then **choose one independent track**—project identity, agent identity,
+managed user access to a trusted KB, or custom OAuth with FastMCP. Each includes
+code exploration, exercises, allow/deny evidence and cleanup.
+See [MOAW preview and publication](docs/moaw-publishing.md) for the hosted reader
+URL and catalog submission instructions.
+
 Reference implementation for Microsoft Foundry agents using three authorization models:
 
 - **A - project identity**
@@ -113,12 +127,21 @@ In Foundry, open **project `abc-b` -> agent `b-confidential`** and select its **
 | Question | Concise answer | How |
 | --- | --- | --- |
 | Does it store a conversation? | **No.** It is stateless. | MAF defaults and middleware set `store=false`; custom [ForceNoStore](hosted/main.py) removes the Playground-supplied `conversation`. Explicit `previous_response_id` chaining is unsupported because no response is stored. |
+| Can it recall a previous question? | **No, not in the current configuration.** | The Playground displays its local transcript, but the agent removes the Foundry conversation reference and sends only the current question to the model. |
 | Does it log the question? | **Yes.** | Custom MAF [RequestAudit](hosted/main.py) writes the question and caller metadata to `abc_agent_request`. |
 | Does it log the answer? | **No in the tested telemetry.** | Custom telemetry never exports it; [verify_showcase.py](verify_showcase.py) confirmed the answer canary was absent from six App Insights tables. |
+| Can it remember while keeping prompt/answer telemetry disabled? | **Yes.** | Keep the Foundry conversation reference and managed state, leave OpenTelemetry content capture disabled, and remove content from custom audit events. Storage and telemetry are separate controls. |
+| Can it remember while retaining `store=false`? | **Yes, with caller-managed history.** | The client must keep prior turns in memory or a customer-controlled store and resend the relevant history on every request. The Foundry Playground does not add this custom behavior. |
 | Is no-store purely a MAF SDK feature? | **No.** | MAF provides `default_options`, `AgentMiddleware`, content-capture flags, and `ResponsesHostServer`; the hard override is custom ASGI middleware added to that server. |
 | Is this zero provider retention? | **No guarantee.** | `store=false` prevents service-managed response/conversation state in this path; it does not prove that all provider security or internal retention is disabled. |
 
 The confidential path also uses MAF's direct [OpenAIChatClient](hosted/main.py) instead of `FoundryChatClient` to avoid the tested project-level model trace path. The live test confirmed that Playground-shaped turns completed, the supplied conversation remained empty, the answer was returned but not retrievable afterward, and it was absent from the checked telemetry window.
+
+Memory choices:
+
+- **Current strict stateless mode:** no Foundry conversation state and no recall of earlier turns.
+- **Foundry-managed conversation:** proper multi-turn recall; prompt/answer export to Application Insights can remain disabled.
+- **Caller-managed conversation:** keep `store=false`, retain history in the application or a customer-controlled store, and resend it each turn. Hosted-agent process memory alone is not reliable because instances can restart or scale out.
 
 ## Recommended secure target
 
