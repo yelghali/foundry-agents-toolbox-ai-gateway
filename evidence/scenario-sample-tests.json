@@ -1,0 +1,325 @@
+{
+  "timestamp": "2026-10-31T15:09:34.386576+00:00",
+  "interpreter": "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+  "results": [
+    {
+      "label": "scenario offline contracts (SDK objects real; network/hosting mocked)",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability",
+        "-p",
+        "test_standalone_samples.py"
+      ],
+      "live": false,
+      "exit_code": 1,
+      "passed": false,
+      "output": "...E....s.s..E..s......E....s....E....s.\n======================================================================\nERROR: test_hosted_entry_point (test_standalone_samples.AgentIdentityTests.test_hosted_entry_point)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 187, in test_hosted_entry_point\n    module = self.load(\"hosted_agent\")\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 32, in load\n    return load(name, self.scenario)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 26, in load\n    spec.loader.exec_module(module)\n  File \"<frozen importlib._bootstrap_external>\", line 999, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\agent-identity\\hosted_agent.py\", line 6, in <module>\n    from agent_framework import Agent\nModuleNotFoundError: No module named 'agent_framework'\n\n======================================================================\nERROR: test_hosted_entry_point (test_standalone_samples.CustomOAuthIdentityTests.test_hosted_entry_point)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 187, in test_hosted_entry_point\n    module = self.load(\"hosted_agent\")\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 32, in load\n    return load(name, self.scenario)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 26, in load\n    spec.loader.exec_module(module)\n  File \"<frozen importlib._bootstrap_external>\", line 999, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\user-identity\\custom-oauth\\hosted_agent.py\", line 6, in <module>\n    from agent_framework import Agent\nModuleNotFoundError: No module named 'agent_framework'\n\n======================================================================\nERROR: test_hosted_entry_point (test_standalone_samples.NativeUserIdentityTests.test_hosted_entry_point)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 187, in test_hosted_entry_point\n    module = self.load(\"hosted_agent\")\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 32, in load\n    return load(name, self.scenario)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 26, in load\n    spec.loader.exec_module(module)\n  File \"<frozen importlib._bootstrap_external>\", line 999, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\user-identity\\trusted-kb\\hosted_agent.py\", line 6, in <module>\n    from agent_framework import Agent\nModuleNotFoundError: No module named 'agent_framework'\n\n======================================================================\nERROR: test_hosted_entry_point (test_standalone_samples.ProjectIdentityTests.test_hosted_entry_point)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 187, in test_hosted_entry_point\n    module = self.load(\"hosted_agent\")\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 32, in load\n    return load(name, self.scenario)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\test_standalone_samples.py\", line 26, in load\n    spec.loader.exec_module(module)\n  File \"<frozen importlib._bootstrap_external>\", line 999, in exec_module\n  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed\n  File \"C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\project-identity\\hosted_agent.py\", line 6, in <module>\n    from agent_framework import Agent\nModuleNotFoundError: No module named 'agent_framework'\n\n----------------------------------------------------------------------\nRan 40 tests in 2.280s\n\nFAILED (errors=4, skipped=5)\n"
+    },
+    {
+      "label": "all scenario syntax",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "-m",
+        "compileall",
+        "-q",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples"
+      ],
+      "live": false,
+      "exit_code": 0,
+      "passed": true,
+      "output": ""
+    },
+    {
+      "label": "project-identity live invoke",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\project-identity\\invoke_hosted.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "status": "completed",
+      "output_types": [
+        "function_call",
+        "function_call_output",
+        "message"
+      ],
+      "expected_marker_present": true,
+      "pinned_version": "2"
+    },
+    {
+      "label": "project-identity live isolated provision",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\project-identity\\provision_toolbox.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "error_summary": []
+    },
+    {
+      "label": "project-identity isolated provisioning verification/cleanup",
+      "live": true,
+      "connection_name": "sample-test-59d52838e63f",
+      "toolbox_name": "sample-test-59d52838e63f",
+      "auth_type": "ProjectManagedIdentity",
+      "target_matches": true,
+      "toolbox_version": "1",
+      "tool_connection_matches": true,
+      "passed": true,
+      "toolbox_deleted": true,
+      "connection_delete_status": 200,
+      "connection_absent": true
+    },
+    {
+      "label": "agent-identity live invoke",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\agent-identity\\invoke_hosted.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "status": "completed",
+      "output_types": [
+        "function_call",
+        "function_call_output",
+        "message"
+      ],
+      "expected_marker_present": true,
+      "pinned_version": "3"
+    },
+    {
+      "label": "agent-identity live isolated provision",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\agent-identity\\provision_toolbox.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "error_summary": []
+    },
+    {
+      "label": "agent-identity isolated provisioning verification/cleanup",
+      "live": true,
+      "connection_name": "sample-test-ab6086bafa62",
+      "toolbox_name": "sample-test-ab6086bafa62",
+      "auth_type": "AgenticIdentityToken",
+      "target_matches": true,
+      "toolbox_version": "1",
+      "tool_connection_matches": true,
+      "passed": true,
+      "toolbox_deleted": true,
+      "connection_delete_status": 200,
+      "connection_absent": true
+    },
+    {
+      "label": "user-identity/trusted-kb live invoke",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\user-identity\\trusted-kb\\invoke_hosted.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "status": "completed",
+      "output_types": [
+        "function_call",
+        "function_call_output",
+        "message"
+      ],
+      "expected_marker_present": true,
+      "pinned_version": "3"
+    },
+    {
+      "label": "user-identity/trusted-kb live isolated provision",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\user-identity\\trusted-kb\\provision_toolbox.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "error_summary": []
+    },
+    {
+      "label": "user-identity/trusted-kb isolated provisioning verification/cleanup",
+      "live": true,
+      "connection_name": "sample-test-73ebd5ca21b6",
+      "toolbox_name": "sample-test-73ebd5ca21b6",
+      "auth_type": "UserEntraToken",
+      "target_matches": true,
+      "toolbox_version": "1",
+      "tool_connection_matches": true,
+      "passed": true,
+      "toolbox_deleted": true,
+      "connection_delete_status": 200,
+      "connection_absent": true
+    },
+    {
+      "label": "custom OAuth live invoke",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\agent-gateway-comparison\\.venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\samples\\user-identity\\custom-oauth\\invoke_hosted.py"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "status": "completed",
+      "output_types": [
+        "function_call",
+        "function_call_output",
+        "message"
+      ],
+      "expected_marker_present": true,
+      "pinned_version": "1"
+    },
+    {
+      "label": "live custom server logs",
+      "command": [
+        "C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.CMD",
+        "containerapp",
+        "logs",
+        "show",
+        "--name",
+        "abc-custom-mcp-e8383e4d",
+        "--resource-group",
+        "rg-agentgw-xlen9",
+        "--tail",
+        "300",
+        "--format",
+        "json"
+      ],
+      "live": true,
+      "passed": true,
+      "exit_code": 0,
+      "events": [
+        {
+          "event": "custom_mcp_tool",
+          "arguments": {
+            "experiment_id": "65abd63a-aad8-4b03-9aa2-631510563c30",
+            "message": "oauth-toolbox",
+            "count": 1
+          },
+          "validated_oid_present": true,
+          "delegated_scope_present": true
+        }
+      ]
+    },
+    {
+      "label": "scenario contracts rerun with exact sample requirements restored in isolated venv",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\evidence\\.scenario-test-venv\\Scripts\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "foundry-abc-observability",
+        "-p",
+        "test_standalone_samples.py"
+      ],
+      "live": false,
+      "passed": true,
+      "exit_code": 0,
+      "output": "........s.s.....s...........s.........s.\n----------------------------------------------------------------------\nRan 40 tests in 9.440s\n\nOK (skipped=5)\n",
+      "mocked": "Azure HTTP, azd OAuth command and hosted runtime execution; real SDK tool serialization/imports"
+    },
+    {
+      "label": "actual standalone custom OAuth server cryptographic/MCP tests",
+      "command": [
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\evidence\\.scenario-test-venv\\Scripts\\python.exe",
+        "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\evidence\\finish_scenario_sample_tests.py"
+      ],
+      "live": false,
+      "passed": true,
+      "tests_run": 6,
+      "output": "test_app_only_rejected (server_tests.BoundaryTests.test_app_only_rejected) ... ok\ntest_authenticated_mcp_tool_and_arguments (server_tests.BoundaryTests.test_authenticated_mcp_tool_and_arguments) ... ok\ntest_rejected_claims (server_tests.BoundaryTests.test_rejected_claims) ... ok\ntest_tool_discovery_omits_optional_fastmcp_metadata (server_tests.BoundaryTests.test_tool_discovery_omits_optional_fastmcp_metadata) ... ok\ntest_valid (server_tests.BoundaryTests.test_valid) ... ok\ntest_wrong_signature (server_tests.BoundaryTests.test_wrong_signature) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.693s\n\nOK\n",
+      "mocked": "JWKS discovery mocked; real ephemeral RSA signatures, JWT validation, HTTP MCP tool/discovery"
+    },
+    {
+      "label": "existing deployed custom server log correlation",
+      "command": [
+        "C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.CMD",
+        "containerapp",
+        "logs",
+        "show",
+        "--name",
+        "abc-custom-mcp-e8383e4d",
+        "--resource-group",
+        "rg-agentgw-xlen9",
+        "--tail",
+        "300",
+        "--format",
+        "json"
+      ],
+      "live": true,
+      "exit_code": 0,
+      "passed": true,
+      "matching_sanitized_events": [
+        {
+          "event": "custom_mcp_tool",
+          "arguments": {
+            "experiment_id": "65abd63a-aad8-4b03-9aa2-631510563c30",
+            "message": "oauth-toolbox",
+            "count": 1
+          },
+          "has_validated_user_oid": true,
+          "delegated_scope_present": true,
+          "audience_matches": true
+        }
+      ],
+      "limit": "Server source equals standalone copy; remote deployment not replaced."
+    },
+    {
+      "label": "isolated toolbox deletion readback",
+      "live": true,
+      "passed": true,
+      "checks": [
+        {
+          "toolbox_name": "sample-test-59d52838e63f",
+          "absent": true
+        },
+        {
+          "toolbox_name": "sample-test-ab6086bafa62",
+          "absent": true
+        },
+        {
+          "toolbox_name": "sample-test-73ebd5ca21b6",
+          "absent": true
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Existing hosted implementations invoked; standalone hosted_agent.py not deployed.",
+    "OAuth provisioning contract-only: reusable secret not persisted; no secrets rotated or consent repeated.",
+    "No manual OBO/APIM requests; no existing agents/connections/toolboxes modified.",
+    "Initial existing venv lacked hosted runtime/server dependencies; restored exact sample requirements in evidence/.scenario-test-venv only. No existing environment changed."
+  ],
+  "custom_experiment_id": "65abd63a-aad8-4b03-9aa2-631510563c30",
+  "custom_server_live": {
+    "note": "Existing deployed server, not newly deployed standalone copy. Correlate experiment UUID in logs.",
+    "source_identical": true
+  },
+  "dependency_restore": {
+    "reason": "Focused checks failed on missing dependencies in existing environments",
+    "isolated_environment": "C:\\Users\\yaelghal\\Downloads\\localDev\\foundry-ai-gateway\\foundry-abc-observability\\evidence\\.scenario-test-venv\\Scripts\\python.exe",
+    "command": "python -m pip install --quiet -r foundry-abc-observability\\samples\\project-identity\\requirements.txt -r foundry-abc-observability\\samples\\user-identity\\custom-oauth\\server-requirements.txt",
+    "versions": {
+      "azure-ai-projects": "2.4.0",
+      "agent-framework-core": "1.20.0",
+      "agent-framework-foundry": "1.14.0",
+      "agent-framework-foundry-hosting": "1.0.0b261002",
+      "fastmcp": "2.14.1",
+      "mcp": "1.27.2",
+      "PyJWT": "2.10.1"
+    },
+    "existing_environments_modified": false
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "experimentId": "9474e3fd-b0d7-4d52-a028-8f4464bf9e45",
+  "query": "\nContainerAppConsoleLogs_CL\n| where TimeGenerated >= datetime(2026-10-31T14:36:49.373354+00:00)\n| where ContainerAppName_s == \"abc-custom-mcp-e8383e4d\"\n| extend audit = parse_json(Log_s)\n| where tostring(audit.event) == \"custom_mcp_tool\"\n| where tostring(audit.arguments.experiment_id) == \"9474e3fd-b0d7-4d52-a028-8f4464bf9e45\"\n| project TimeGenerated, RevisionName_s, audit\n",
+  "workspaceId": "614ec6f2-570e-4f69-880f-e665afa3214f",
+  "claims": {
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+    "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+    "scp": "access_as_user",
+    "azp": "bd0cc73c-e7ec-4fb5-9b74-3c2fdc5b37af",
+    "ver": "2.0"
+  },
+  "arguments": {
+    "experiment_id": "9474e3fd-b0d7-4d52-a028-8f4464bf9e45",
+    "message": "oauth-toolbox",
+    "count": 2
+  },
+  "matchingLogs": [
+    {
+      "TimeGenerated": "2026-10-31T14:36:55.450955Z",
+      "RevisionName_s": "abc-custom-mcp-e8383e4d--0000003",
+      "audit": {
+        "event": "custom_mcp_tool",
+        "claims": {
+          "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+          "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+          "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+          "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+          "scp": "access_as_user",
+          "azp": "bd0cc73c-e7ec-4fb5-9b74-3c2fdc5b37af",
+          "ver": "2.0"
+        },
+        "arguments": {
+          "experiment_id": "9474e3fd-b0d7-4d52-a028-8f4464bf9e45",
+          "message": "oauth-toolbox",
+          "count": 2
+        }
+      }
+    }
+  ],
+  "responseStatus": "completed",
+  "sessionMatches": true,
+  "apimUsed": false,
+  "manualOboUsed": false,
+  "verifiedAt": "2026-10-31T14:38:28.505395+00:00"
+}
