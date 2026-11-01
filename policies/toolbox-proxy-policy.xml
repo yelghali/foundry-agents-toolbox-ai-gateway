@@ -33,6 +33,38 @@
       <metadata name="mcp_server_id" value="@(context.Api.Id)" />
       <metadata name="platform_principal_oid" value="@(String.Join(&quot;,&quot;, ((Jwt)context.Variables[&quot;toolbox-caller&quot;]).Claims.GetValueOrDefault(&quot;oid&quot;, new string[0])))" />
       <metadata name="token_audience" value="@(((Jwt)context.Variables[&quot;toolbox-caller&quot;]).Audiences.FirstOrDefault() ?? &quot;&quot;)" />
+      <metadata name="token_validation" value="VALIDATED_AT_APIM_ENTRA_BOUNDARY" />
+      <metadata name="token_forwarding" value="UNCHANGED_BEARER_NO_APIM_EXCHANGE" />
+      <metadata name="token_sha256" value="@{
+        var authorization = context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;);
+        var token = authorization.Substring(authorization.IndexOf(' ') + 1);
+        return BitConverter.ToString(System.Security.Cryptography.SHA256.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(token))).Replace(&quot;-&quot;, &quot;&quot;).ToLowerInvariant();
+      }" />
+      <metadata name="selected_token_claims" value="@{
+        var token = (Jwt)context.Variables[&quot;toolbox-caller&quot;];
+        var selected = new JObject();
+        foreach (var name in new [] { &quot;iss&quot;, &quot;aud&quot;, &quot;tid&quot;, &quot;oid&quot;, &quot;azp&quot;, &quot;appid&quot;, &quot;scp&quot;, &quot;roles&quot;, &quot;idtyp&quot;, &quot;ver&quot;, &quot;exp&quot;, &quot;iat&quot; }) {
+          if (token.Claims.ContainsKey(name)) {
+            var values = token.Claims[name];
+            selected[name] = name == &quot;roles&quot; || values.Length != 1 ? (JToken)new JArray(values) : (JToken)new JValue(values[0]);
+          }
+        }
+        selected[&quot;iss&quot;] = token.Issuer;
+        selected[&quot;aud&quot;] = new JArray(token.Audiences);
+        return selected.ToString(Newtonsoft.Json.Formatting.None);
+      }" />
+      <metadata name="selected_token_header" value="@{
+        var authorization = context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;);
+        var token = authorization.Substring(authorization.IndexOf(' ') + 1);
+        var segment = token.Split('.')[0].Replace('-', '+').Replace('_', '/');
+        segment = segment.PadRight(segment.Length + (4 - segment.Length % 4) % 4, '=');
+        var header = JObject.Parse(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(segment)));
+        var selected = new JObject();
+        foreach (var name in new [] { &quot;alg&quot;, &quot;kid&quot; }) {
+          if (header[name] != null) { selected[name] = header[name]; }
+        }
+        return selected.ToString(Newtonsoft.Json.Formatting.None);
+      }" />
       <metadata name="caller_context_present" value="@(((bool)context.Variables[&quot;caller-context-present&quot;]).ToString())" />
       <metadata name="caller_context_hash" value="@((string)context.Variables[&quot;caller-context-hash&quot;])" />
       <metadata name="mcp_method" value="@((string)context.Variables[&quot;mcp-method&quot;])" />

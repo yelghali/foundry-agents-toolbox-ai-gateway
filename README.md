@@ -25,7 +25,12 @@ replayed with [`replay_observability.py`](replay_observability.py). See the work
 foldable real exchanges for actual outcomes, including failures; a deployed
 resource or HTTP 200 wrapper is not a successful tool call. Original agents,
 their default traffic, and C's OAuth connection/secret/consent are not changed.
-Isolated diagnostics persist up to 8192 body bytes; use only nonsensitive prompts.
+Raw diagnostic bodies are disabled. Sanitized trace metadata captures up to 8192
+bytes from nonsensitive prompts/results, removing credentials, caller baggage and
+consent state before logging. APIM records allowlisted claims **after Entra validation**,
+plus a SHA-256 token fingerprint; it forwards the bearer unchanged, without an exchange.
+Caller-side decoded claims are labeled **not validated**. Custom MCP validation records
+the distinct data-token audience and principal; absent roles/scopes are not invented.
 
 Reference implementation for Microsoft Foundry agents using three authorization models:
 

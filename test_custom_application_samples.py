@@ -61,7 +61,8 @@ class CustomApplicationTests(unittest.TestCase):
                 module = load(folder, "custom_server.py")
                 validator = self.validator(module)
                 result = validator.validate(self.token())
-                self.assertEqual(set(result), {"tid", "oid", "aud", "iss", "ver"})
+                self.assertEqual(set(result), {"tid", "oid", "aud", "iss", "ver",
+                                               "idtyp", "roles", "exp", "iat"})
                 self.assertEqual(result["oid"], PRINCIPAL)
                 # ACL-based application access deliberately permits role-less tokens.
                 validator.validate(self.token(remove=("roles", "idtyp")))
@@ -127,7 +128,12 @@ class CustomApplicationTests(unittest.TestCase):
                     self.assertFalse(result.get("isError", False), result)
                     output = json.loads(result["content"][0]["text"])
                     self.assertEqual(output["claims"]["oid"], PRINCIPAL)
+                    self.assertEqual(output["tokenObservation"]["validation"], "VALIDATED_AT_MCP_BOUNDARY")
+                    self.assertEqual(output["tokenObservation"]["header"], {"alg": "RS256", "kid": "test"})
+                    self.assertEqual(len(output["tokenObservation"]["tokenSha256"]), 64)
                     self.assertNotIn("never expose", response.text)
+                    self.assertNotIn(headers["Authorization"][7:], response.text)
+                    self.assertNotIn(headers["Authorization"][7:].split(".")[2], response.text)
                     self.assertNotIn("_fastmcp", response.text)
                     invalid = await rpc("tools/call", {
                         "name": "identity_probe", "arguments": {"experiment_id": "not-a-uuid"},
@@ -146,6 +152,12 @@ class CustomApplicationTests(unittest.TestCase):
                         self.assertEqual(rejected.status_code, 401)
                         self.assertEqual(rejected.headers["www-authenticate"], "Bearer")
                     self.assertIsNone(module.IDENTITY.get())
+                    spoofed = await client.post("/mcp", headers={
+                        "x-token-validation": "VALIDATED_AT_MCP_BOUNDARY",
+                        "x-token-claims": json.dumps({"oid": PRINCIPAL, "roles": ["Mcp.Invoke"]}),
+                    }, json={"jsonrpc": "2.0", "id": 6, "method": "tools/list"})
+                    self.assertEqual(spoofed.status_code, 401)
+                    self.assertIsNone(module.TOKEN_OBSERVATION.get())
         for folder in ("project-identity", "agent-identity"):
             with self.subTest(folder=folder):
                 asyncio.run(exercise(folder))

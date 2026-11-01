@@ -8,7 +8,109 @@ from replay_observability import ROOT
 
 def block(value, language="json"):
     text = value if isinstance(value, str) else json.dumps(value, indent=2)
-    return f"\n```{language}\n{text.strip()}\n```\n"
+    fence = "`" * max(3, max((len(match) + 1 for match in re.findall(r"`+", text)), default=3))
+    return f"\n{fence}{language}\n{text.strip()}\n{fence}\n"
+
+
+def token_excerpt(observation):
+    return {
+        "boundary": observation.get("boundary", "NOT_OBSERVED"),
+        "validation": observation.get("validation", "NOT_OBSERVED"),
+        "header": {key: value for key, value in observation.get("header", {}).items()
+                   if key in ("alg", "kid")},
+        "claims": {key: value for key, value in observation.get("claims", {}).items()
+                   if key in ("iss", "aud", "tid", "oid", "azp", "appid", "scp",
+                              "roles", "idtyp", "ver", "iat", "nbf", "exp")},
+    }
+
+
+def identity_lesson(capture):
+    scenario = capture["scenario"]
+    configuration = capture.get("identityConfiguration", {})
+    caller = token_excerpt(capture.get("callerTokenObservation", {}))
+    platform = token_excerpt((capture.get("selectedApimExchange") or {}).get(
+        "platformTokenObservation", {}))
+    events = capture["mcpValidatedQueryResultEvents"]
+    downstream = token_excerpt(events[0]["result"].get("tokenObservation", {})) if events else None
+
+    def principal(observation):
+        return f"`{observation['claims'].get('oid', 'NOT_OBSERVED')}`"
+
+    def audience(observation):
+        value = observation["claims"].get("aud", "NOT_OBSERVED")
+        return f"`{', '.join(value) if isinstance(value, list) else value}`"
+
+    configured = {
+        "a-native": "Project managed identity; Search audience",
+        "a-custom": "Project managed identity; custom application audience",
+        "b-native": "Agent identity; Search audience",
+        "b-custom": "Agent identity; custom application audience",
+        "c-native": "Managed user identity; Search audience/scopes",
+        "c-custom": "OAuth2 authorization code + refresh; delegated custom API scope",
+    }[scenario]
+    lines = [
+        "**Identity-hop lesson (observations versus configuration)**",
+        f"Control-plane source: `{configuration.get('source', 'NOT_OBSERVED')}`; observed UTC "
+        f"`{configuration.get('observedAt', 'NOT_OBSERVED')}`. Configured agent instance principal "
+        f"`{configuration.get('agentInstancePrincipalId', 'NOT_OBSERVED')}`; project managed identity "
+        f"`{configuration.get('projectManagedIdentityPrincipalId', 'NOT_OBSERVED')}`. "
+        "Configuration alone is not token evidence.",
+        "| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |",
+        "|---|---|---|---|",
+        f"| User → agent | {principal(caller)} | {audience(caller)} | "
+        "Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance "
+        "does not upgrade this capture to JWT validation evidence. |",
+        f"| Agent → APIM → Toolbox | {principal(platform)} | {audience(platform)} | "
+        "Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. "
+        "APIM performs no token exchange. |",
+        (f"| Toolbox → MCP | {principal(downstream)} | {audience(downstream)} | "
+         "**Validated at MCP** (signature, issuer, audience, allowed principal); actual query/result event. |"
+         if downstream else
+         f"| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | "
+         f"Configured: {configured}. No downstream JWT capture; do not substitute configured claims. |"),
+        "Selected caller JWT header/claims (decoded-only):", block(caller),
+        "Selected platform JWT header/claims (APIM-validated):", block(platform),
+    ]
+    if downstream:
+        lines += ["Selected downstream JWT header/claims (MCP-validated):", block(downstream)]
+    lines += [
+        "Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, "
+        "signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` "
+        "means absent from this observation, not an authorization failure. "
+        "RBAC/application authorization need not appear as a `roles` claim.",
+        "**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, "
+        "including track A; it is neither the initiating human nor A's project managed identity.",
+    ]
+    if scenario == "a-custom":
+        lines += [
+            "This capture proves an audience/principal transition: the agent's app token for "
+            "`https://ai.azure.com` reaches APIM/Toolbox, while the downstream MCP validates "
+            "the project managed identity for the custom API audience. Project MI is used "
+            "**downstream in A custom**, not on agent → Toolbox. This is platform-managed "
+            "downstream token acquisition; no internal token-endpoint grant was traced, "
+            "so do not call it a captured JWT-bearer OBO exchange.",
+        ]
+    elif scenario == "a-native":
+        lines += ["Search MCP returned the exact access marker below, but its backend JWT and "
+                  "internal Search queries are **NOT_OBSERVED**. Project MI/Search audience "
+                  "are configured, not decoded or MCP-validated token claims in this capture."]
+    elif scenario.startswith("b"):
+        lines += ["The platform app token passes APIM validation, but Toolbox reports missing "
+                  "`AgentInstanceClientId` context. An `oid` matching the configured agent does "
+                  "not prove that Toolbox received all required agent-instance context. No "
+                  "successful downstream agent token/query was observed on this upstream route. "
+                  "Original B direct/native and its downstream Search gateway are distinct routes."]
+    elif scenario == "c-native":
+        lines += ["The caller's delegated `scp` is not a downstream Search scope. This replay "
+                  "fails with `AADSTS500016` before a query; managed user token acquisition is "
+                  "configured, but no backend user token or internal OBO grant is observed."]
+    else:
+        lines += ["Current upstream replay is **pending consent**, not OAuth success. The "
+                  "configured delegated scope is not an observed token `scp`. The earlier "
+                  "**direct C custom OAuth success** used authorization-code consent plus "
+                  "refresh on a different invocation/route, without this upstream APIM hop; "
+                  "it must not be relabelled as this run or as literal JWT-bearer OBO."]
+    return "\n\n".join(lines)
 
 
 def scenario_section(capture):
@@ -22,6 +124,7 @@ def scenario_section(capture):
         f"Agent `{capture['agent']}` v{capture['agentVersion']}; Toolbox v{capture['toolboxVersion']}. "
         f"UTC `{capture['startedAt']}` → `{capture['completedAt']}`. "
         f"Experiment `{capture['experimentId']}`.",
+        identity_lesson(capture),
         "**1. User input → actual hosted response**",
         "Exact submitted user prompt (not the generated MCP arguments):",
         block(capture["input"], "text"),
@@ -65,7 +168,8 @@ def scenario_section(capture):
         elif result.get("structuredContent") is not None:
             lines += ["Actual MCP result:", block(result["structuredContent"])]
         elif result.get("content"):
-            lines += ["Actual MCP response content:", block(result["content"])]
+            lines += ["Actual MCP response text (exact captured content; full reference metadata below):",
+                      *[block(item["text"], "text") for item in result["content"] if "text" in item]]
         else:
             lines += ["Actual MCP response:", block(body)]
     else:

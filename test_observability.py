@@ -10,6 +10,24 @@ import replay_observability as replay
 
 
 class ObservabilityTests(unittest.TestCase):
+    def test_token_excerpt_only_exports_safe_selected_claims(self):
+        from update_observability_workshop import block, token_excerpt
+        observation = {
+            "validation": "DECODED_ONLY_NOT_VALIDATED",
+            "header": {"alg": "RS256", "kid": "safe-kid", "jwk": "private-key"},
+            "claims": {"oid": "principal", "aud": "audience", "scp": "read",
+                       "exp": 100, "name": "private-name", "email": "private-email"},
+            "rawToken": "private-token", "tokenSha256": "opaque-hash",
+        }
+        excerpt = token_excerpt(observation)
+        self.assertEqual(excerpt["claims"], {"oid": "principal", "aud": "audience",
+                                            "scp": "read", "exp": 100})
+        self.assertEqual(excerpt["header"], {"alg": "RS256", "kid": "safe-kid"})
+        self.assertNotIn("private", json.dumps(excerpt))
+        self.assertNotIn("roles", excerpt["claims"])
+        self.assertEqual(block("```json\n{}\n```", "text"),
+                         "\n````text\n```json\n{}\n```\n````\n")
+
     def test_session_runtime_logs_match_sdk_datetime_and_exclude_session_metadata(self):
         from collect_hosted_runtime_logs import session_logs
         project = MagicMock()
@@ -69,6 +87,11 @@ class ObservabilityTests(unittest.TestCase):
         self.assertIn(capture["selectedApimExchange"]["responseBody"], rendered)
         self.assertIn("actual AgentInstanceClientId error", rendered)
         self.assertIn("NO_CORRELATED_RUNTIME_LINES", rendered)
+        self.assertIn("| User → agent |", rendered)
+        self.assertIn("| Agent → APIM → Toolbox |", rendered)
+        self.assertIn("| Toolbox → MCP | **NOT_OBSERVED** token", rendered)
+        self.assertIn("calling agent instance", rendered)
+        self.assertIn("Missing `scp`, `roles` or `idtyp`", rendered)
         capture["selectedApimExchange"]["requestBody"] = json.dumps({
             "method": "tools/call", "params": {"name": "actual_tool",
                                              "arguments": {"queries": ["exact generated query"]}},
@@ -155,12 +178,18 @@ class ObservabilityTests(unittest.TestCase):
         self.assertNotIn("oauthPassword", source)
 
     def test_repair_renders_valid_xml_and_empty_bodies(self):
-        with patch.object(replay.cm, "arm", return_value={}) as arm:
+        with patch.object(replay.cm, "arm", return_value={"properties": {}}) as arm:
             replay.repair_policy({"tenantId": "tenant"}, {
                 "apiId": "/isolated", "scenario": "a-native",
                 "toolboxEndpoint": "https://example.test/toolboxes/isolated/mcp?api-version=v1",
             })
-        saved = arm.call_args.args[3]["properties"]["value"]
+        saved = arm.call_args_list[0].args[3]["properties"]["value"]
+        diagnostic = arm.call_args_list[-1].args[3]["properties"]
+        for side in ("frontend", "backend"):
+            self.assertEqual(diagnostic[side]["request"]["body"]["bytes"], 0)
+            self.assertEqual(diagnostic[side]["response"]["body"]["bytes"], 0)
+        self.assertIn("$..baggage", saved)
+        self.assertIn("&lt;consent-url-redacted&gt;", saved)
         self.assertIn("context.Response.Body == null", saved)
         self.assertIn("body.Length == 0", saved)
         self.assertIn("&lt;empty-body&gt;", saved)

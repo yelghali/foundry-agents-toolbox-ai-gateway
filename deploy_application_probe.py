@@ -12,7 +12,7 @@ import common as cm
 from replay_observability import ROOT, STATE, now, safe, write
 
 NAME = "obs-application-mcp-20261031"
-IMAGE = "observability-application-mcp:20261031-v2"
+IMAGE = "observability-application-mcp:20261101-claims-v3"
 
 
 def az(*arguments, cwd=ROOT):

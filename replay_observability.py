@@ -1,8 +1,8 @@
 """Additive Agent -> APIM -> Toolbox replays; never changes original agent defaults.
 
-Only synthetic public workshop prompts are allowed. Isolated APIM diagnostics persist
-up to 8192 bytes of prompts/results in Azure Monitor. No authorization/caller headers
-are logged. Existing OAuth connections are referenced, never edited.
+Only synthetic public workshop prompts are allowed. Sanitized trace metadata persists
+up to 8192 bytes of prompts/results in Azure Monitor; raw diagnostic body logging is
+disabled. No authorization/caller headers are logged. OAuth connections are not edited.
 """
 
 import argparse
@@ -23,6 +23,7 @@ from azure.ai.projects.models import (
 )
 
 import common as cm
+from token_evidence import token_observation
 
 ROOT = Path(__file__).parent
 STATE = ROOT / "evidence" / "observability-deployment.json"
@@ -30,7 +31,10 @@ STATE = ROOT / "evidence" / "observability-deployment.json"
 
 def safe(value):
     if isinstance(value, dict):
-        return {key: ("<redacted>" if any(word in key.lower() for word in
+        return {key: ("<redacted>" if key.lower() in (
+                "token", "jwt", "bearer", "consent_state", "oauth_state",
+                "x-agent-foundry-call-id", "callercontext", "caller_context",
+                ) or any(word in key.lower() for word in
                 ("authorization", "secret", "access_token", "refresh_token", "session_id", "baggage"))
                 else safe(item)) for key, item in value.items()}
     if isinstance(value, list):
@@ -73,6 +77,26 @@ def render_policy(config, direct):
         if (context.Request.Body == null) { return &quot;&lt;empty-body&gt;&quot;; }
         var body = context.Request.Body.As&lt;string&gt;(preserveContent: true) ?? &quot;&quot;;
         if (body.Length == 0) { return &quot;&lt;empty-body&gt;&quot;; }
+        try {
+          var parsed = JObject.Parse(body);
+          foreach (var baggage in parsed.SelectTokens(&quot;$..baggage&quot;).ToList()) {
+            baggage.Replace(new JValue(&quot;&lt;baggage-redacted&gt;&quot;));
+          }
+          body = parsed.ToString(Newtonsoft.Json.Formatting.None);
+        } catch { }
+        body = System.Text.RegularExpressions.Regex.Replace(body, &quot;eyJ[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+&quot;, &quot;&lt;jwt-redacted&gt;&quot;);
+        body = System.Text.RegularExpressions.Regex.Replace(body, &quot;(?i)Bearer\\\\s+[A-Za-z0-9._~+/-]+&quot;, &quot;&lt;bearer-redacted&gt;&quot;);
+        var cursor = 0;
+        while ((cursor = body.IndexOf(&quot;https:&quot; + &quot;/&quot; + &quot;/&quot;, cursor, StringComparison.OrdinalIgnoreCase)) &gt;= 0) {
+          var end = cursor;
+          while (end &lt; body.Length &amp;&amp; !Char.IsWhiteSpace(body[end]) &amp;&amp; body[end] != (char)34 &amp;&amp; body[end] != (char)92 &amp;&amp; body[end] != (char)60 &amp;&amp; body[end] != (char)62) { end++; }
+          var url = body.Substring(cursor, end - cursor);
+          if (url.IndexOf(&quot;consent&quot;, StringComparison.OrdinalIgnoreCase) &gt;= 0) {
+            body = body.Substring(0, cursor) + &quot;&lt;consent-url-redacted&gt;&quot; + body.Substring(end);
+            cursor += &quot;&lt;consent-url-redacted&gt;&quot;.Length;
+          } else { cursor = end; }
+        }
+        body = System.Text.RegularExpressions.Regex.Replace(body, &quot;oacr_[A-Za-z0-9_-]+&quot;, &quot;&lt;oauth-request-id-redacted&gt;&quot;);
         return body.Length &gt; 8192 ? body.Substring(0,8192) : body;
       }" />
     </trace>"""
@@ -81,6 +105,18 @@ def render_policy(config, direct):
     policy = policy.replace('name="error_reason"', 'name="api" value="@(context.Api.Id)" />\n      <metadata name="error_reason"')
     policy = policy.replace("</inbound>", request_trace + "</inbound>")
     return policy.replace("<outbound>", "<outbound>" + response_trace)
+
+
+def disable_raw_body_logging(config, record):
+    resource = record["apiId"] + "/diagnostics/applicationinsights"
+    diagnostic = cm.arm(config, "GET", resource, version="2024-05-01")["properties"]
+    for side in ("frontend", "backend"):
+        diagnostic[side] = {
+            "request": {"headers": [], "body": {"bytes": 0}},
+            "response": {"headers": [], "body": {"bytes": 0}},
+        }
+    diagnostic["logClientIp"] = False
+    cm.arm(config, "PUT", resource, {"properties": diagnostic}, version="2024-05-01")
 
 
 def deploy(config, scenario, custom, custom_endpoint, republish=False, requirements=None):
@@ -133,8 +169,8 @@ def deploy(config, scenario, custom, custom_endpoint, republish=False, requireme
                         version="2025-09-01-preview")["properties"]
     for side in ("frontend", "backend"):
         diagnostic[side] = {
-            "request": {"headers": [], "body": {"bytes": 8192}},
-            "response": {"headers": [], "body": {"bytes": 8192}},
+            "request": {"headers": [], "body": {"bytes": 0}},
+            "response": {"headers": [], "body": {"bytes": 0}},
         }
     diagnostic["logClientIp"] = False
     cm.arm(config, "PUT", api_id + "/diagnostics/applicationinsights",
@@ -191,8 +227,19 @@ def wait(config, record):
     while True:
         agent = project.agents.get_version(agent_name=record["agent"], agent_version=record["version"])
         if "ACTIVE" in str(agent.status):
-            identity = agent.instance_identity or project.agents.get(agent_name=record["agent"]).instance_identity
+            resource = project.agents.get(agent_name=record["agent"])
+            identity = agent.instance_identity or resource.instance_identity
             record["principalId"] = str(identity.principal_id)
+            record["identityConfiguration"] = {
+                "projectResourceId": cohort["project"]["id"],
+                "projectManagedIdentityPrincipalId": cohort["project"]["principalId"],
+                "agentDisplayName": record["agent"],
+                "agentResourceId": resource.id,
+                "agentInstancePrincipalId": str(identity.principal_id),
+                "agentInstanceClientId": str(identity.client_id),
+                "source": "Azure agent control-plane identity and configured project",
+                "limitation": "Configured identities are not themselves observed token claims.",
+            }
             cm.grant(config, record["principalId"], cohort["project"]["id"], cm.FOUNDRY_USER_ROLE_ID)
             if record["scenario"] == "b-native":
                 cm.grant(config, record["principalId"], cohort["searchId"], cm.SEARCH_INDEX_DATA_READER_ROLE_ID)
@@ -218,9 +265,13 @@ def replay(config, record):
         agent_name=record["agent"], version_indicator=VersionRefIndicator(agent_version=record["version"]),
     )
     started = now()
+    caller_token = cm.credential(config).get_token("https://ai.azure.com/.default").token
+    caller_observation = token_observation(
+        caller_token, boundary="selected Azure CLI credential -> hosted agent endpoint",
+    )
     response = requests.post(
         cohort["project"]["endpoint"] + f"/agents/{record['agent']}/endpoint/protocols/openai/responses?api-version=v1",
-        headers={"Authorization": "Bearer " + cm.credential(config).get_token("https://ai.azure.com/.default").token,
+        headers={"Authorization": "Bearer " + caller_token,
                  "x-client-request-id": experiment},
         json={"input": prompt, "stream": False, "store": record["scenario"] == "c-custom",
               "agent_session_id": session.agent_session_id}, timeout=600,
@@ -232,6 +283,7 @@ def replay(config, record):
     evidence = {**record, "experimentId": experiment, "startedAt": started,
                 "completedAt": now(), "httpStatus": response.status_code,
                 "store": record["scenario"] == "c-custom",
+                "callerTokenObservation": caller_observation,
                 "input": prompt, "agentResponse": safe(body),
                 "verdict": "UNVERIFIED_UNTIL_APIM_AND_MCP_LOG_CORRELATION"}
     write(ROOT / "evidence" / ("observability-" + record["scenario"] + ".json"), evidence)
@@ -280,6 +332,15 @@ AppTraces
                 exchange["callerContextPresent"] = p["caller_context_present"]
                 exchange["callerContextHash"] = p["caller_context_hash"]
                 exchange["observedPlatformPrincipalId"] = p["platform_principal_oid"]
+                if p.get("token_validation") == "VALIDATED_AT_APIM_ENTRA_BOUNDARY":
+                    exchange["platformTokenObservation"] = {
+                        "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+                        "validation": p["token_validation"],
+                        "header": json.loads(p.get("selected_token_header", "{}")),
+                        "claims": json.loads(p.get("selected_token_claims", "{}")),
+                        "tokenSha256": p.get("token_sha256"),
+                        "forwarding": p.get("token_forwarding"),
+                    }
         data["exchangesForLatestRun"] = list(exchanges.values())
         run["apimExchanges"] = data["exchangesForLatestRun"]
         calls = [item for item in run["apimExchanges"] if '"tools/call"' in item.get("requestBody", "")]
@@ -303,6 +364,7 @@ def repair_policy(config, record):
         print(safe(error.response.text))
         raise
     print(record["scenario"], "isolated empty-body-safe tracing applied")
+    disable_raw_body_logging(config, record)
 
 
 def main():

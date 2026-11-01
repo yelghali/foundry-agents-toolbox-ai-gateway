@@ -36,7 +36,9 @@ def validate(token):
     )
     if claims["tid"] != TENANT or "access_as_user" not in claims["scp"].split():
         raise jwt.InvalidTokenError("Required tenant or delegated scope missing")
-    return {name: claims.get(name) for name in ("tid", "oid", "aud", "iss", "scp", "azp", "ver")}
+    return {name: claims[name] for name in
+            ("tid", "oid", "aud", "iss", "scp", "azp", "appid", "roles", "idtyp", "ver", "exp", "iat")
+            if name in claims}
 
 
 @mcp.tool

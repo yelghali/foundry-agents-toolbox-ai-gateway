@@ -36,7 +36,7 @@ AppTraces
     Tool=tostring(p.mcp_tool_name), BackendStatus=tostring(p.backend_status)
 ```
 
-- A upstream Toolbox gateway sees the platform/project token. Correlate its opaque caller-context hash with hosted user audit; the token's `oid` is not automatically a human.
+- The optional upstream Toolbox gateway sees the **calling agent instance's platform app token**, including A. Its APIM-validated `oid` matches that instance, not the caller or project MI. APIM forwards this bearer unchanged; it performs no token exchange. Correlate its opaque caller-context hash with hosted user audit.
 - B downstream data gateway sees the original agent Search token. Its actual raw Search path identifies `index-b`; its KB path identifies `kb-b`, not the internal source queries.
 - C agent ingress sees and validates the initiating user's delegated platform token. It logs user `oid`, request ID and response status while Search user tokens stay on trusted first-party hops.
 - Original gateway diagnostics record zero request/response body bytes and no authorization headers.
@@ -73,6 +73,25 @@ fan-out remain `NOT_OBSERVED`; successful MCP responses through APIM are observe
 In the November 1 replay, the CLI container stream was unavailable, but the SDK
 session stream returned time-correlated console lines for all six invocations.
 That runtime evidence does not turn the four blocked tool paths into successes.
+
+The latest six selected invocations started at **12:27 UTC on November 1**.
+Each workshop scenario now has a three-hop identity table and exact selected JWT
+header/claim observations. Caller credentials are **decoded only, not locally
+validated**; platform credentials are **APIM-validated**; A custom's correlated
+application token is **MCP-validated**. Only `alg`, `kid`, issuer, audience,
+tenant/principal/client IDs, scopes/roles, identity/version and validity times
+are shown. Raw JWTs, signatures, keys and opaque token metadata are excluded.
+
+A custom proves the downstream transition from the agent instance/platform
+audience to the **project managed identity/custom API audience**. This is
+platform-managed acquisition, not a traced internal JWT-bearer OBO grant.
+A native's successful Search response does not expose its backend token:
+configured project MI/Search audience remain **NOT_OBSERVED** token claims.
+The blocked B/C paths likewise have no observed backend token. Missing `roles`
+does not imply failure; C's configured delegated scopes are not observed `scp`.
+Earlier direct C custom authorization-code/refresh success is separate from
+the current upstream consent-pending invocation; original B direct and
+downstream-gateway results must also remain separately labelled.
 
 For fresh telemetry, scope the query to the selected run's UTC start/end and
 recorded APIM request ID rather than the entire project. Allow ingestion delay;

@@ -4,6 +4,7 @@ import json
 import re
 from replay_observability import ROOT, now, write
 from compile_observability_evidence import hosted_snapshot
+from update_observability_workshop import scenario_section, token_excerpt
 
 
 def main():
@@ -39,6 +40,18 @@ def main():
             for event in capture["mcpValidatedQueryResultEvents"]
         )
         checks[capture["scenario"] + "-input"] = capture["input"] in workshop
+        checks[capture["scenario"] + "-exact-current-section"] = scenario_section(capture) in workshop
+        caller = capture["callerTokenObservation"]
+        platform = (selected or {}).get("platformTokenObservation", {})
+        checks[capture["scenario"] + "-identity-observations"] = (
+            json.dumps(token_excerpt(caller), indent=2) in workshop
+            and json.dumps(token_excerpt(platform), indent=2) in workshop
+            and caller.get("validation") == "DECODED_ONLY_NOT_VALIDATED"
+            and platform.get("validation") == "VALIDATED_AT_APIM_ENTRA_BOUNDARY"
+            and platform.get("forwarding") == "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+            and platform.get("claims", {}).get("oid")
+            == capture["identityConfiguration"]["agentInstancePrincipalId"]
+        )
         checks[capture["scenario"] + "-hosted-full"] = json.dumps(capture["agentResponse"], indent=2) in workshop
         runtime = capture["hostedRuntimeLogQuery"]
         checks[capture["scenario"] + "-runtime"] = (
@@ -59,6 +72,15 @@ def main():
     )
     checks["sixFoldableRealExchanges"] = workshop.count("<summary>Real logged exchange") == 6
     checks["sixHostedSnapshots"] = workshop.count("<summary>Hosted service snapshot") == 6
+    checks["sixIdentityHopLessons"] = workshop.count("**Identity-hop lesson (observations versus configuration)**") == 6
+    checks["sixIdentityHopTables"] = all(workshop.count(hop) == 6 for hop in (
+        "| User → agent |", "| Agent → APIM → Toolbox |", "| Toolbox → MCP |",
+    ))
+    checks["downstreamApplicationValidated"] = all(
+        json.dumps(token_excerpt(event["result"]["tokenObservation"]), indent=2) in workshop
+        and event["result"]["tokenObservation"]["validation"] == "VALIDATED_AT_MCP_BOUNDARY"
+        for capture in captures for event in capture["mcpValidatedQueryResultEvents"]
+    )
     checks["threeStagesPerScenario"] = all(
         workshop.count(stage) == 6 for stage in (
             "**1. User input → actual hosted response**",

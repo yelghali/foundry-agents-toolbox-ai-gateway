@@ -525,7 +525,82 @@ Fresh Azure hosted-agent executions on **November 1, 2026**, on the existing pin
 
 ### Live replay — a-native: PASS_NATIVE_MCP_QUERY_RESULT
 
-Agent `obs-20261031-a-native` v2; Toolbox v2. UTC `2026-11-01T11:30:31.301838+00:00` → `2026-11-01T11:30:53.958986+00:00`. Experiment `d8606504-9ef8-4924-bb65-cb81cdd7bf51`.
+Agent `obs-20261031-a-native` v2; Toolbox v2. UTC `2026-11-01T12:27:16.786462+00:00` → `2026-11-01T12:27:29.663493+00:00`. Experiment `3b65cb79-3fa3-4d25-9586-c15160702a09`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:29.080398+00:00`. Configured agent instance principal `e50d19b6-0a5e-4689-b0d8-d2544f821c86`; project managed identity `42756227-4b4a-4a69-ab63-43c7f3e2b9fe`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `e50d19b6-0a5e-4689-b0d8-d2544f821c86` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | Configured: Project managed identity; Search audience. No downstream JWT capture; do not substitute configured claims. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793540492,
+    "iat": 1793535740
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+    "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539642",
+    "iat": "1793535742"
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+Search MCP returned the exact access marker below, but its backend JWT and internal Search queries are **NOT_OBSERVED**. Project MI/Search audience are configured, not decoded or MCP-validated token claims in this capture.
 
 **1. User input → actual hosted response**
 
@@ -537,7 +612,7 @@ Call retrieve_kb_a exactly once with arguments {"query": "Find the normal access
 ```
 
 
-Hosted HTTP **200**; response `caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47`; status **completed**.
+Hosted HTTP **200**; response `caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ`; status **completed**.
 
 Actual hosted answer (model text; verify against the tool evidence below):
 
@@ -549,9 +624,9 @@ The normal access record for cohort A is **COHORT_A_ONLY_D900EADA82**.
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/call`; request `4a6c451d-2366-4887-b6f6-b85611ef913b`; backend HTTP **200**.
+`tools/call`; request `2bc7f489-e5b8-42dc-8c2f-c772235527e6`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:30:51.0553478Z`; response `2026-11-01T11:30:53.6784309Z`.
+UTC request `2026-11-01T12:27:26.8259628Z`; response `2026-11-01T12:27:29.6123617Z`.
 
 Actual generated tool `observed___knowledge_base_retrieve` arguments:
 
@@ -565,28 +640,17 @@ Actual generated tool `observed___knowledge_base_retrieve` arguments:
 ```
 
 
-Actual MCP response content:
+Actual MCP response text (exact captured content; full reference metadata below):
 
 
-```json
-[
-  {
-    "type": "text",
-    "text": "The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.",
-    "_meta": {
-      "x-request-id": "10f344ca-9891-4cb6-81a7-c73ff6336d9c"
-    }
-  },
-  {
-    "type": "text",
-    "text": "{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}",
-    "_meta": {
-      "x-request-id": "10f344ca-9891-4cb6-81a7-c73ff6336d9c",
-      "title": "Cohort A access record",
-      "preserveExactValue": false
-    }
-  }
-]
+```text
+The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.
+```
+
+
+
+```text
+{"kind":"reference","ref_id":0,"uri":"mcp://searchindex/normal","mimeType":"application/json","sourceData":{"id":"normal","title":"Cohort A access record","content":"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim."}}
 ```
 
 
@@ -594,23 +658,23 @@ Actual MCP response content:
 
 Native Search MCP response is observed through APIM. Search's internal query/fan-out and service-owned console logs are **NOT_OBSERVED**; no internal query is reconstructed.
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:45:38.250082+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:32:41.457822+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:30:51.017240410+00:00`.
+UTC `2026-11-01T12:27:26.778557797+00:00`.
 
 
 ```text
-2026-11-01 11:30:51,017 INFO agent_framework: Function name: observed___knowledge_base_retrieve
+2026-11-01 12:27:26,778 INFO agent_framework: Function name: observed___knowledge_base_retrieve
 ```
 
 
-UTC `2026-11-01T11:30:53.660194490+00:00`.
+UTC `2026-11-01T12:27:29.594289879+00:00`.
 
 
 ```text
-2026-11-01 11:30:53,656 INFO agent_framework: Function observed___knowledge_base_retrieve succeeded.
+2026-11-01 12:27:29,594 INFO agent_framework: Function observed___knowledge_base_retrieve succeeded.
 ```
 
 
@@ -620,13 +684,13 @@ UTC `2026-11-01T11:30:53.660194490+00:00`.
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1`. Configured downstream target: `https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview` (configuration is not execution evidence).
 
-Caller-context SHA-256: `mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=`.
+Caller-context SHA-256: `sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=`.
 
 Exact captured request (only sensitive baggage redacted):
 
 
 ```json
-{"method":"tools/call","params":{"_meta":{"traceparent":"00-93f7d26f0231ba06e8c9b05f8d1c6883-771f98de90a58c19-01","baggage":"<baggage-redacted>","generateCitations":true,"KnowledgeSourceMetadata":[{"name":"ks-a","type":"searchIndex"}],"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"name":"observed___knowledge_base_retrieve","arguments":{"queries":["Find the normal access record in cohort A"]}},"jsonrpc":"2.0","id":3}
+{"method":"tools/call","params":{"_meta":{"traceparent":"00-6d320155e104179f08bbdf8d685a8dfd-ed7f05be3bbbbc38-01","baggage":"<baggage-redacted>","generateCitations":true,"KnowledgeSourceMetadata":[{"name":"ks-a","type":"searchIndex"}],"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"name":"observed___knowledge_base_retrieve","arguments":{"queries":["Find the normal access record in cohort A"]}},"jsonrpc":"2.0","id":3}
 ```
 
 
@@ -634,11 +698,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {"_meta":{"agenticReasoningTokens":28,"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"content":[{"type":"text","text":"The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.","_meta":{"x-request-id":"10f344ca-9891-4cb6-81a7-c73ff6336d9c"}},{"type":"text","text":"{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}","_meta":{"x-request-id":"10f344ca-9891-4cb6-81a7-c73ff6336d9c","title":"Cohort A access record","preserveExactValue":false}}],"structuredContent":null}
-}
+{"jsonrpc":"2.0","id":3,"result":{"_meta":{"agenticReasoningTokens":28,"tool_configuration":{"type":"mcp","name":"retrieve_kb_a","server_label":"observed","server_url":"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary","original_type":"mcp"}},"content":[{"type":"text","text":"The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.","_meta":{"x-request-id":"9814ac59-6827-4613-8599-26065ea2f8bd"}},{"type":"text","text":"{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}","_meta":{"x-request-id":"9814ac59-6827-4613-8599-26065ea2f8bd","title":"Cohort A access record","preserveExactValue":false}}],"structuredContent":null}}
 ```
 
 
@@ -648,58 +708,173 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "822d6e3e-5eb3-4e71-b7a0-a43a3fd6ca80",
+    "apimRequestId": "dcf55ac7-e36c-45ef-8d05-543345a6d90d",
     "callerContextPresent": "True",
-    "callerContextHash": "mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=",
+    "callerContextHash": "sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=",
     "observedPlatformPrincipalId": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
-    "requestTimestamp": "2026-11-01T11:30:43.9288587Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539642",
+        "iat": "1793535742"
+      },
+      "tokenSha256": "57e7b33810040f5b45d0bc1fb42363220e1d93050c971c435177b69df4b1324d",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:22.635771Z",
     "requestBody": "{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"sampling\":{}},\"clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"}},\"jsonrpc\":\"2.0\",\"id\":0}",
-    "responseTimestamp": "2026-11-01T11:30:44.4842478Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 0,\n  \"result\": {\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}\n}",
+    "responseTimestamp": "2026-11-01T12:27:22.8412355Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "87df1617-8bf9-4151-bcad-f1aa1042980c",
+    "apimRequestId": "ec5d2522-ac6d-4c55-be95-e219dfbbad1a",
     "callerContextPresent": "True",
-    "callerContextHash": "mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=",
+    "callerContextHash": "sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=",
     "observedPlatformPrincipalId": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
-    "requestTimestamp": "2026-11-01T11:30:47.5386346Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539642",
+        "iat": "1793535742"
+      },
+      "tokenSha256": "57e7b33810040f5b45d0bc1fb42363220e1d93050c971c435177b69df4b1324d",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:22.8548061Z",
     "requestBody": "{\"method\":\"notifications/initialized\",\"jsonrpc\":\"2.0\"}",
-    "responseTimestamp": "2026-11-01T11:30:48.2776489Z",
+    "responseTimestamp": "2026-11-01T12:27:22.8795377Z",
     "responseBody": "<empty-body>",
     "backendStatus": 204
   },
   {
-    "apimRequestId": "0310578f-ff85-44d9-a324-a435201ff004",
+    "apimRequestId": "55bde9ce-d3e4-4ee5-8a73-6031542c6a54",
     "callerContextPresent": "True",
-    "callerContextHash": "mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=",
+    "callerContextHash": "sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=",
     "observedPlatformPrincipalId": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
-    "requestTimestamp": "2026-11-01T11:30:48.3868407Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539642",
+        "iat": "1793535742"
+      },
+      "tokenSha256": "57e7b33810040f5b45d0bc1fb42363220e1d93050c971c435177b69df4b1324d",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:23.9615653Z",
     "requestBody": "{\"method\":\"ping\",\"jsonrpc\":\"2.0\",\"id\":1}",
-    "responseTimestamp": "2026-11-01T11:30:48.4400076Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {}\n}",
+    "responseTimestamp": "2026-11-01T12:27:24.0033439Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "4ffeee0f-8b50-4ff4-be62-007d74c3920b",
+    "apimRequestId": "82a2efa7-7724-4bbb-9aa7-621fb1471b16",
     "callerContextPresent": "True",
-    "callerContextHash": "mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=",
+    "callerContextHash": "sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=",
     "observedPlatformPrincipalId": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
-    "requestTimestamp": "2026-11-01T11:30:48.4575515Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539642",
+        "iat": "1793535742"
+      },
+      "tokenSha256": "57e7b33810040f5b45d0bc1fb42363220e1d93050c971c435177b69df4b1324d",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:24.0344006Z",
     "requestBody": "{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":2}",
-    "responseTimestamp": "2026-11-01T11:30:49.8580289Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"result\": {\"tools\":[{\"name\":\"observed___knowledge_base_retrieve\",\"description\":\"Use knowledge_base_retrieve to search for information or documents that must be authoritative and attributable to a source. This knowledge base is always relevant to the user and any organizations they're affiliated with. You may call this tool with ambiguous queries to retrieve relevant context before asking the user for further clarification. If a Knowledge Base Description is provided, use it to understand what content is included/excluded and to scope your retrieval.\\n\\nUse queries for exactly one complete, natural-language user question or request, not keyword searches, fragments, or rewritten search syntax. Copy the user's information need as a full natural-language question or request. Within that question, include VERBATIM every distinctive token from the user: proper nouns, acronyms (CIA, GDPR), multi-word organization or product names, alphanumeric identifiers (QX-9000, v2.1.4, L1997-00-0351), quoted phrases, version strings, exact filter terms (\\\"conference papers only\\\", \\\"non-paywalled\\\"), group/sort/include/exclude directives, and negation/limit directives (\\\"exclude contractors\\\", \\\"exclude news coverage\\\", \\\"no more than 10\\\", \\\"only include public companies\\\"). Ranges, dates, and numeric thresholds also stay as written. Query in the user's language; do not translate exact terms or quoted phrases. Preserve version strings and multi-word expressions such as tax deferred and official records as written. For temporal, as-of, date range, fiscal year, quarter, and recency constraints, preserve the exact time constraint in the query. The retrieval backend performs expansion. Do not split values of one unresolved constraint into parallel calls. Reserve parallel calls for independent information needs.\\n\\nExamples:\\n\\n\\t// User Query: Which vendor owned Project Helios between 2021 and 2024?\\n\\targuments: {\\\"queries\\\": [\\\"Which vendor owned Project Helios between 2021 and 2024?\\\"]}\\n\\n\\t// User Query: Find the QX-9000 price sheet; it may be called a rate card, quote sheet, or SKU list.\\n\\targuments: {\\\"queries\\\": [\\\"Find the QX-9000 price sheet; it may be called a rate card, quote sheet, or SKU list.\\\"]}\\n\\n\\t// User Query: Find official records about \\\"rate card\\\" changes, include public companies only, and exclude forum posts.\\n\\targuments: {\\\"queries\\\": [\\\"Find official records about \\\\\\\"rate card\\\\\\\" changes, include public companies only, and exclude forum posts.\\\"]}\\nKnowledge Base Description - Foundry IQ Toolbox RBAC live-test knowledge base.\\r\\n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"queries\":{\"description\":\"Use queries for exactly one complete, natural-language user question or request (max 400 characters; ideally under 70 words), not keyword searches, fragments, or rewritten search syntax. Copy the user's information need as a full question/request using the user's own words and language, preserving entities, references, identifiers, ranges, aliases, filters, exact terms, quoted phrases, grouping directives, comparison directives, version strings, and multi-word expressions without translating them.\\n\\nAlways return a JSON array of strings, even when issuing a single query. Example: {\\\"queries\\\": [\\\"What was Contoso's fiscal year 2024 revenue?\\\"]}.\",\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":400},\"minItems\":1,\"maxItems\":1}},\"required\":[\"queries\"],\"additionalProperties\":false,\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"_meta\":{\"generateCitations\":true,\"KnowledgeSourceMetadata\":[{\"name\":\"ks-a\",\"type\":\"searchIndex\"}],\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"execution\":{\"taskSupport\":\"optional\"}}]}\n}",
+    "responseTimestamp": "2026-11-01T12:27:25.1283207Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"observed___knowledge_base_retrieve\",\"description\":\"Use knowledge_base_retrieve to search for information or documents that must be authoritative and attributable to a source. This knowledge base is always relevant to the user and any organizations they're affiliated with. You may call this tool with ambiguous queries to retrieve relevant context before asking the user for further clarification. If a Knowledge Base Description is provided, use it to understand what content is included/excluded and to scope your retrieval.\\n\\nUse queries for exactly one complete, natural-language user question or request, not keyword searches, fragments, or rewritten search syntax. Copy the user's information need as a full natural-language question or request. Within that question, include VERBATIM every distinctive token from the user: proper nouns, acronyms (CIA, GDPR), multi-word organization or product names, alphanumeric identifiers (QX-9000, v2.1.4, L1997-00-0351), quoted phrases, version strings, exact filter terms (\\\"conference papers only\\\", \\\"non-paywalled\\\"), group/sort/include/exclude directives, and negation/limit directives (\\\"exclude contractors\\\", \\\"exclude news coverage\\\", \\\"no more than 10\\\", \\\"only include public companies\\\"). Ranges, dates, and numeric thresholds also stay as written. Query in the user's language; do not translate exact terms or quoted phrases. Preserve version strings and multi-word expressions such as tax deferred and official records as written. For temporal, as-of, date range, fiscal year, quarter, and recency constraints, preserve the exact time constraint in the query. The retrieval backend performs expansion. Do not split values of one unresolved constraint into parallel calls. Reserve parallel calls for independent information needs.\\n\\nExamples:\\n\\n\\t// User Query: Which vendor owned Project Helios between 2021 and 2024?\\n\\targuments: {\\\"queries\\\": [\\\"Which vendor owned Project Helios between 2021 and 2024?\\\"]}\\n\\n\\t// User Query: Find the QX-9000 price sheet; it may be called a rate card, quote sheet, or SKU list.\\n\\targuments: {\\\"queries\\\": [\\\"Find the QX-9000 price sheet; it may be called a rate card, quote sheet, or SKU list.\\\"]}\\n\\n\\t// User Query: Find official records about \\\"rate card\\\" changes, include public companies only, and exclude forum posts.\\n\\targuments: {\\\"queries\\\": [\\\"Find official records about \\\\\\\"rate card\\\\\\\" changes, include public companies only, and exclude forum posts.\\\"]}\\nKnowledge Base Description - Foundry IQ Toolbox RBAC live-test knowledge base.\\r\\n\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"queries\":{\"description\":\"Use queries for exactly one complete, natural-language user question or request (max 400 characters; ideally under 70 words), not keyword searches, fragments, or rewritten search syntax. Copy the user's information need as a full question/request using the user's own words and language, preserving entities, references, identifiers, ranges, aliases, filters, exact terms, quoted phrases, grouping directives, comparison directives, version strings, and multi-word expressions without translating them.\\n\\nAlways return a JSON array of strings, even when issuing a single query. Example: {\\\"queries\\\": [\\\"What was Contoso's fiscal year 2024 revenue?\\\"]}.\",\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":400},\"minItems\":1,\"maxItems\":1}},\"required\":[\"queries\"],\"additionalProperties\":false,\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"_meta\":{\"generateCitations\":true,\"KnowledgeSourceMetadata\":[{\"name\":\"ks-a\",\"type\":\"searchIndex\"}],\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"execution\":{\"taskSupport\":\"optional\"}}]}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "4a6c451d-2366-4887-b6f6-b85611ef913b",
+    "apimRequestId": "2bc7f489-e5b8-42dc-8c2f-c772235527e6",
     "callerContextPresent": "True",
-    "callerContextHash": "mkZ8VlfiFfE79alJvyLel2HZ1PNcA7hz9XxwjRNg1hU=",
+    "callerContextHash": "sgP6xGOH41e0u2ECwtS65mayPJCPt2/eHJS3xkuZjg8=",
     "observedPlatformPrincipalId": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
-    "requestTimestamp": "2026-11-01T11:30:51.0553478Z",
-    "requestBody": "{\"method\":\"tools/call\",\"params\":{\"_meta\":{\"traceparent\":\"00-93f7d26f0231ba06e8c9b05f8d1c6883-771f98de90a58c19-01\",\"baggage\":\"<baggage-redacted>\",\"generateCitations\":true,\"KnowledgeSourceMetadata\":[{\"name\":\"ks-a\",\"type\":\"searchIndex\"}],\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"name\":\"observed___knowledge_base_retrieve\",\"arguments\":{\"queries\":[\"Find the normal access record in cohort A\"]}},\"jsonrpc\":\"2.0\",\"id\":3}",
-    "responseTimestamp": "2026-11-01T11:30:53.6784309Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"result\": {\"_meta\":{\"agenticReasoningTokens\":28,\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"content\":[{\"type\":\"text\",\"text\":\"The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.\",\"_meta\":{\"x-request-id\":\"10f344ca-9891-4cb6-81a7-c73ff6336d9c\"}},{\"type\":\"text\",\"text\":\"{\\\"kind\\\":\\\"reference\\\",\\\"ref_id\\\":0,\\\"uri\\\":\\\"mcp://searchindex/normal\\\",\\\"mimeType\\\":\\\"application/json\\\",\\\"sourceData\\\":{\\\"id\\\":\\\"normal\\\",\\\"title\\\":\\\"Cohort A access record\\\",\\\"content\\\":\\\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\\\"}}\",\"_meta\":{\"x-request-id\":\"10f344ca-9891-4cb6-81a7-c73ff6336d9c\",\"title\":\"Cohort A access record\",\"preserveExactValue\":false}}],\"structuredContent\":null}\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "appid": "e50d19b6-0a5e-4689-b0d8-d2544f821c86",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539642",
+        "iat": "1793535742"
+      },
+      "tokenSha256": "57e7b33810040f5b45d0bc1fb42363220e1d93050c971c435177b69df4b1324d",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:26.8259628Z",
+    "requestBody": "{\"method\":\"tools/call\",\"params\":{\"_meta\":{\"traceparent\":\"00-6d320155e104179f08bbdf8d685a8dfd-ed7f05be3bbbbc38-01\",\"baggage\":\"<baggage-redacted>\",\"generateCitations\":true,\"KnowledgeSourceMetadata\":[{\"name\":\"ks-a\",\"type\":\"searchIndex\"}],\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"name\":\"observed___knowledge_base_retrieve\",\"arguments\":{\"queries\":[\"Find the normal access record in cohort A\"]}},\"jsonrpc\":\"2.0\",\"id\":3}",
+    "responseTimestamp": "2026-11-01T12:27:29.6123617Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"_meta\":{\"agenticReasoningTokens\":28,\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"retrieve_kb_a\",\"server_label\":\"observed\",\"server_url\":\"https://srchabca7puse24s5tluc.search.windows.net/knowledgebases/kb-a/mcp?api-version=2026-05-01-preview\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/iq-a-primary\",\"original_type\":\"mcp\"}},\"content\":[{\"type\":\"text\",\"text\":\"The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.\",\"_meta\":{\"x-request-id\":\"9814ac59-6827-4613-8599-26065ea2f8bd\"}},{\"type\":\"text\",\"text\":\"{\\\"kind\\\":\\\"reference\\\",\\\"ref_id\\\":0,\\\"uri\\\":\\\"mcp://searchindex/normal\\\",\\\"mimeType\\\":\\\"application/json\\\",\\\"sourceData\\\":{\\\"id\\\":\\\"normal\\\",\\\"title\\\":\\\"Cohort A access record\\\",\\\"content\\\":\\\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\\\"}}\",\"_meta\":{\"x-request-id\":\"9814ac59-6827-4613-8599-26065ea2f8bd\",\"title\":\"Cohort A access record\",\"preserveExactValue\":false}}],\"structuredContent\":null}}",
     "backendStatus": 200
   }
 ]
@@ -711,31 +886,31 @@ Actual hosted response (sensitive consent/session identifiers redacted):
 
 ```json
 {
-  "id": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+  "id": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
   "object": "response",
   "output": [
     {
       "type": "function_call",
-      "id": "fc_0a15ddabde2870bf00wUtXKXezwRim76LR5LjrgPu2IJ0hOo0k",
-      "call_id": "call_eTzuB9gvZVpePVIFKEA0D7uk",
+      "id": "fc_080649b5ca93875d00g5uBK1P2mfampsnwxTvlcAe7G8V80g0C",
+      "call_id": "call_2EMQ6MvZ3SzkqLQ7Fc1Z0RbU",
       "name": "observed___knowledge_base_retrieve",
       "arguments": "{\"queries\":[\"Find the normal access record in cohort A\"]}",
       "status": "completed",
-      "response_id": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+      "response_id": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
       "agent_reference": null
     },
     {
       "type": "function_call_output",
-      "id": "fco_0a15ddabde2870bf00dHWaYOz9COI7jb8Dol2LyhP93sqKLyE8",
-      "call_id": "call_eTzuB9gvZVpePVIFKEA0D7uk",
+      "id": "fco_080649b5ca93875d00neC5H5UQg3h0xIFXPyIHN1sxdw5nyRQi",
+      "call_id": "call_2EMQ6MvZ3SzkqLQ7Fc1Z0RbU",
       "output": "The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.\n{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}",
       "status": "completed",
-      "response_id": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+      "response_id": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
       "agent_reference": null
     },
     {
       "type": "message",
-      "id": "msg_0a15ddabde2870bf00dI2QLvtsYjBPP8YRGUMxoQkLCl9EggSy",
+      "id": "msg_080649b5ca93875d00ANNy0O7QV9CAx7giwj5w8RixU5XTHZYp",
       "role": "assistant",
       "content": [
         {
@@ -746,14 +921,14 @@ Actual hosted response (sensitive consent/session identifiers redacted):
         }
       ],
       "status": "completed",
-      "response_id": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+      "response_id": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
       "agent_reference": null
     }
   ],
-  "created_at": 1793532641,
+  "created_at": 1793536041,
   "parallel_tool_calls": false,
   "status": "completed",
-  "completed_at": 1793532654,
+  "completed_at": 1793536050,
   "usage": {
     "input_tokens": 1627,
     "input_tokens_details": {
@@ -766,7 +941,7 @@ Actual hosted response (sensitive consent/session identifiers redacted):
     },
     "total_tokens": 1677
   },
-  "response_id": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+  "response_id": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-a-native",
@@ -787,440 +962,434 @@ Runtime query result:
   "scenario": "a-native",
   "agent": "obs-20261031-a-native",
   "version": "2",
-  "experimentId": "d8606504-9ef8-4924-bb65-cb81cdd7bf51",
-  "responseId": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
-  "invocationStartedAt": "2026-11-01T11:30:31.301838+00:00",
-  "invocationCompletedAt": "2026-11-01T11:30:53.958986+00:00",
-  "queriedAt": "2026-11-01T11:45:38.250082+00:00",
+  "experimentId": "3b65cb79-3fa3-4d25-9586-c15160702a09",
+  "responseId": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
+  "invocationStartedAt": "2026-11-01T12:27:16.786462+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:29.663493+00:00",
+  "queriedAt": "2026-11-01T12:32:41.457822+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.301144417+00:00",
+      "timestamp": "2026-11-01T12:27:16.854998602+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.306586867+00:00",
+      "timestamp": "2026-11-01T12:27:16.860661155+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.710540412+00:00",
+      "timestamp": "2026-11-01T12:27:17.288551181+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,710 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:17,288 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.857698198+00:00",
+      "timestamp": "2026-11-01T12:27:17.435438662+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,857 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:17,435 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,888 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:17,468 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.889011939+00:00",
+      "timestamp": "2026-11-01T12:27:17.469311572+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.891683668+00:00",
+      "timestamp": "2026-11-01T12:27:17.472241960+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,891 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:17,472 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.891835629+00:00",
+      "timestamp": "2026-11-01T12:27:17.472413345+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,891 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:17,472 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.892372554+00:00",
+      "timestamp": "2026-11-01T12:27:17.472869185+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,892 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:17,472 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.892485617+00:00",
+      "timestamp": "2026-11-01T12:27:17.472966427+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,892 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:17,472 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.958866538+00:00",
+      "timestamp": "2026-11-01T12:27:17.541366221+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,958 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:17,541 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.959539741+00:00",
+      "timestamp": "2026-11-01T12:27:17.542139202+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,959 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:17,542 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.959775594+00:00",
+      "timestamp": "2026-11-01T12:27:17.542376893+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,959 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:17,542 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.959846918+00:00",
+      "timestamp": "2026-11-01T12:27:17.542448135+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,959 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:17,542 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.960942710+00:00",
+      "timestamp": "2026-11-01T12:27:17.543872474+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,959 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:17,542 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.961365853+00:00",
+      "timestamp": "2026-11-01T12:27:17.544382950+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:30:31 +0000] [44] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:17 +0000] [35] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:31.961387472+00:00",
+      "timestamp": "2026-11-01T12:27:17.544403751+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:31,961 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:17,544 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:32.166710605+00:00",
+      "timestamp": "2026-11-01T12:27:17.708188706+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:32,166 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: eb3714e1a78f5c9891e468b66ae05c90)"
+      "line": "2026-11-01 12:27:17,707 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 7386cc7cba2a2b9575b3f7709cf93df2)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:32.167525713+00:00",
+      "timestamp": "2026-11-01T12:27:17.709224065+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:32,167 INFO azure.ai.agentserver: 192.168.0.1:40416 \"GET /readiness 1.1\" 200 20 1063\u03bcs"
+      "line": "2026-11-01 12:27:17,709 INFO azure.ai.agentserver: 192.168.0.1:52926 \"GET /readiness 1.1\" 200 20 1334\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:32.167711873+00:00",
+      "timestamp": "2026-11-01T12:27:17.709473559+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:32,167 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.8ms (trace-id: eb3714e1a78f5c9891e468b66ae05c90)"
+      "line": "2026-11-01 12:27:17,709 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 1.0ms (trace-id: 7386cc7cba2a2b9575b3f7709cf93df2)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:41.612960658+00:00",
+      "timestamp": "2026-11-01T12:27:21.924692560+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:41,612 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 93f7d26f0231ba06e8c9b05f8d1c6883, x-ms-client-request-id: 50050814-7e45-481f-9fa7-0c86ae0d7954, trace-id: 93f7d26f0231ba06e8c9b05f8d1c6883)"
+      "line": "2026-11-01 12:27:21,924 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 6d320155e104179f08bbdf8d685a8dfd, x-ms-client-request-id: 8397e88a-4a50-491e-b7df-562794341b52, trace-id: 6d320155e104179f08bbdf8d685a8dfd)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:41.614843153+00:00",
+      "timestamp": "2026-11-01T12:27:21.926866085+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:41,613 INFO azure.ai.agentserver: Creating response caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:21,926 INFO azure.ai.agentserver: Creating response caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:41.614843153+00:00",
+      "timestamp": "2026-11-01T12:27:21.927686691+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:41,614 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47"
+      "line": "2026-11-01 12:27:21,927 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:41.934836813+00:00",
+      "timestamp": "2026-11-01T12:27:22.305938714+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:41,934 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:22,305 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:44.461745350+00:00",
+      "timestamp": "2026-11-01T12:27:22.810351776+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:44,461 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:22,810 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:44.462953034+00:00",
+      "timestamp": "2026-11-01T12:27:22.817417394+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:44,462 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
+      "line": "2026-11-01 12:27:22,811 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:44.465680021+00:00",
+      "timestamp": "2026-11-01T12:27:22.817417394+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:44,465 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,815 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:44.466319566+00:00",
+      "timestamp": "2026-11-01T12:27:22.817417394+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:44,465 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,815 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:44.466481134+00:00",
+      "timestamp": "2026-11-01T12:27:22.817417394+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:44,466 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:22,816 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:46.719869436+00:00",
+      "timestamp": "2026-11-01T12:27:22.848403028+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:46,719 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported."
+      "line": "2026-11-01 12:27:22,848 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 204 No Content\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.280742674+00:00",
+      "timestamp": "2026-11-01T12:27:22.849287419+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,280 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 204 No Content\""
+      "line": "2026-11-01 12:27:22,849 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.283109258+00:00",
+      "timestamp": "2026-11-01T12:27:22.849459493+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,281 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,849 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.283109258+00:00",
+      "timestamp": "2026-11-01T12:27:22.849564876+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,281 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,849 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.283109258+00:00",
+      "timestamp": "2026-11-01T12:27:23.990791569+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,282 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:23,990 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.415280462+00:00",
+      "timestamp": "2026-11-01T12:27:23.995582787+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,415 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:23,995 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.418153965+00:00",
+      "timestamp": "2026-11-01T12:27:23.995785931+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,418 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:23,995 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.418349205+00:00",
+      "timestamp": "2026-11-01T12:27:23.995894613+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,418 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:23,995 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:48.418627555+00:00",
+      "timestamp": "2026-11-01T12:27:25.098588848+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:48,418 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:25,098 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:49.832329587+00:00",
+      "timestamp": "2026-11-01T12:27:25.218811988+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:49,832 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:25,218 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token_info succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:49.942087519+00:00",
+      "timestamp": "2026-11-01T12:27:25.219090259+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:49,942 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token_info succeeded"
+      "line": "2026-11-01 12:27:25,219 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token_info succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:49.942313309+00:00",
+      "timestamp": "2026-11-01T12:27:25.219197431+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:49,942 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token_info succeeded"
+      "line": "2026-11-01 12:27:25,219 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:49.942418223+00:00",
+      "timestamp": "2026-11-01T12:27:26.300805333+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:49,942 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:26,300 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:50.718579742+00:00",
+      "timestamp": "2026-11-01T12:27:26.778557797+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:50,718 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:26,778 INFO agent_framework: Function name: observed___knowledge_base_retrieve"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.017240410+00:00",
+      "timestamp": "2026-11-01T12:27:26.783904192+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,017 INFO agent_framework: Function name: observed___knowledge_base_retrieve"
+      "line": "2026-11-01 12:27:26,783 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.020439268+00:00",
+      "timestamp": "2026-11-01T12:27:26.784187534+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,019 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:26,784 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.020439268+00:00",
+      "timestamp": "2026-11-01T12:27:26.784283410+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,019 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:26,784 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.020439268+00:00",
+      "timestamp": "2026-11-01T12:27:27.299307708+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,019 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:27,299 INFO azure.identity._credentials.environment: No environment configuration found."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.720958932+00:00",
+      "timestamp": "2026-11-01T12:27:27.300580265+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,720 INFO azure.identity._credentials.environment: No environment configuration found."
+      "line": "2026-11-01 12:27:27,300 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:51.721549889+00:00",
+      "timestamp": "2026-11-01T12:27:27.581298583+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:51,721 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
+      "line": "2026-11-01 12:27:27,581 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:52.094601549+00:00",
+      "timestamp": "2026-11-01T12:27:29.588568810+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:52,094 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:29,588 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:53.653336081+00:00",
+      "timestamp": "2026-11-01T12:27:29.594289879+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:53,653 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:29,594 INFO agent_framework: Function observed___knowledge_base_retrieve succeeded."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:53.660194490+00:00",
+      "timestamp": "2026-11-01T12:27:29.595383244+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:53,656 INFO agent_framework: Function observed___knowledge_base_retrieve succeeded."
+      "line": "2026-11-01 12:27:29,594 INFO agent_framework: Function duration: 2.815300s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:53.660194490+00:00",
+      "timestamp": "2026-11-01T12:27:30.352495870+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:53,656 INFO agent_framework: Function duration: 2.639175s"
+      "line": "2026-11-01 12:27:30,352 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.610664848+00:00",
+      "timestamp": "2026-11-01T12:27:30.590677128+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,610 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:30,590 INFO azure.ai.agentserver: Response caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ completed: status=completed output_count=3"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.830060910+00:00",
+      "timestamp": "2026-11-01T12:27:30.591370896+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,829 INFO azure.ai.agentserver: Response caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47 completed: status=completed output_count=3"
+      "line": "2026-11-01 12:27:30,591 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.830450687+00:00",
+      "timestamp": "2026-11-01T12:27:30.592292506+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,830 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:30,592 INFO azure.ai.agentserver: 192.168.0.1:52926 \"POST /responses 1.1\" 200 1997 8668314\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.831110123+00:00",
+      "timestamp": "2026-11-01T12:27:30.592541572+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,831 INFO azure.ai.agentserver: 192.168.0.1:34452 \"POST /responses 1.1\" 200 1997 13218432\u03bcs"
+      "line": "2026-11-01 12:27:30,592 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 8666.7ms (x-request-id: 6d320155e104179f08bbdf8d685a8dfd, x-ms-client-request-id: 8397e88a-4a50-491e-b7df-562794341b52, trace-id: 6d320155e104179f08bbdf8d685a8dfd)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.831311419+00:00",
+      "timestamp": "2026-11-01T12:27:30.592699209+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,831 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 13218.1ms (x-request-id: 93f7d26f0231ba06e8c9b05f8d1c6883, x-ms-client-request-id: 50050814-7e45-481f-9fa7-0c86ae0d7954, trace-id: 93f7d26f0231ba06e8c9b05f8d1c6883)"
+      "line": "2026-11-01 12:27:30,592 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:54.831466553+00:00",
+      "timestamp": "2026-11-01T12:27:30.598146920+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:54,831 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:30,597 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:55.351969987+00:00",
+      "timestamp": "2026-11-01T12:27:30.598946256+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:55,351 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:30,598 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:55.352254814+00:00",
+      "timestamp": "2026-11-01T12:27:30.599036396+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:30:55,352 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:30:55.352348741+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:30:55,352 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential\n"
+      "line": "2026-11-01 12:27:30,599 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential\n"
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -1243,20 +1412,20 @@ Local full sources: `evidence\observability-a-native.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-a-native.json#agentResponse",
-  "responseId": "caresp_0a15ddabde2870bf006ESxstcTQy7QnstF1vpNBvP40kJaqo47",
+  "responseId": "caresp_080649b5ca93875d008DWYcVFOuLXlKFMFuChJONUhZcJfmEyJ",
   "status": "completed",
   "error": null,
   "events": [
     {
       "type": "function_call",
       "name": "observed___knowledge_base_retrieve",
-      "call_id": "call_eTzuB9gvZVpePVIFKEA0D7uk",
+      "call_id": "call_2EMQ6MvZ3SzkqLQ7Fc1Z0RbU",
       "arguments": "{\"queries\":[\"Find the normal access record in cohort A\"]}",
       "status": "completed"
     },
     {
       "type": "function_call_output",
-      "call_id": "call_eTzuB9gvZVpePVIFKEA0D7uk",
+      "call_id": "call_2EMQ6MvZ3SzkqLQ7Fc1Z0RbU",
       "output": "The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.\n{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}",
       "status": "completed"
     }
@@ -1271,7 +1440,107 @@ Local full sources: `evidence\observability-a-native.json`, `evidence\observabil
 
 ### Live replay — a-custom: PASS_VALIDATED_APPLICATION_MCP_QUERY_RESULT
 
-Agent `obs-20261031-a-custom` v1; Toolbox v1. UTC `2026-11-01T11:31:40.631888+00:00` → `2026-11-01T11:31:54.208049+00:00`. Experiment `4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e`.
+Agent `obs-20261031-a-custom` v1; Toolbox v1. UTC `2026-11-01T12:27:45.261444+00:00` → `2026-11-01T12:27:56.744487+00:00`. Experiment `f43426d5-e764-475f-a405-81da227365b3`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:33.207963+00:00`. Configured agent instance principal `e2284463-607a-4080-b430-3fc63c778516`; project managed identity `42756227-4b4a-4a69-ab63-43c7f3e2b9fe`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `e2284463-607a-4080-b430-3fc63c778516` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | `42756227-4b4a-4a69-ab63-43c7f3e2b9fe` | `c0135af3-d0d3-410f-a1ce-8f2470f5dd93` | **Validated at MCP** (signature, issuer, audience, allowed principal); actual query/result event. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793539972,
+    "iat": 1793535768
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "e2284463-607a-4080-b430-3fc63c778516",
+    "appid": "e2284463-607a-4080-b430-3fc63c778516",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539670",
+    "iat": "1793535770"
+  }
+}
+```
+
+
+Selected downstream JWT header/claims (MCP-validated):
+
+
+```json
+{
+  "boundary": "application MCP signature/issuer/audience/principal validation",
+  "validation": "VALIDATED_AT_MCP_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+    "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+    "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+    "ver": "2.0",
+    "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+    "exp": 1793566559,
+    "iat": 1793479859
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+This capture proves an audience/principal transition: the agent's app token for `https://ai.azure.com` reaches APIM/Toolbox, while the downstream MCP validates the project managed identity for the custom API audience. Project MI is used **downstream in A custom**, not on agent → Toolbox. This is platform-managed downstream token acquisition; no internal token-endpoint grant was traced, so do not call it a captured JWT-bearer OBO exchange.
 
 **1. User input → actual hosted response**
 
@@ -1279,32 +1548,66 @@ Exact submitted user prompt (not the generated MCP arguments):
 
 
 ```text
-Call identity_probe exactly once with arguments {"experiment_id": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e"}. Return its exact result.
+Call identity_probe exactly once with arguments {"experiment_id": "f43426d5-e764-475f-a405-81da227365b3"}. Return its exact result.
 ```
 
 
-Hosted HTTP **200**; response `caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ`; status **completed**.
+Hosted HTTP **200**; response `caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7`; status **completed**.
 
 Actual hosted answer (model text; verify against the tool evidence below):
 
 
-```text
-{"marker":"CUSTOM_MCP_APPLICATION_VALIDATED","experiment_id":"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e","claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0"}}
+````text
+```json
+{
+  "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
+  "experiment_id": "f43426d5-e764-475f-a405-81da227365b3",
+  "claims": {
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+    "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+    "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+    "ver": "2.0",
+    "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+    "exp": 1793566559,
+    "iat": 1793479859
+  },
+  "tokenObservation": {
+    "boundary": "application MCP signature/issuer/audience/principal validation",
+    "validation": "VALIDATED_AT_MCP_BOUNDARY",
+    "header": {
+      "alg": "RS256",
+      "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+    },
+    "claims": {
+      "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+      "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+      "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+      "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+      "ver": "2.0",
+      "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+      "exp": 1793566559,
+      "iat": 1793479859
+    },
+    "tokenSha256": "a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394"
+  }
+}
 ```
+````
 
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/call`; request `57b474e0-a134-412f-b590-0a01ffd6b783`; backend HTTP **200**.
+`tools/call`; request `f6b603a9-d6aa-4c9c-b1a0-3c78958e0f9a`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:31:53.1160014Z`; response `2026-11-01T11:31:53.346469Z`.
+UTC request `2026-11-01T12:27:52.3486869Z`; response `2026-11-01T12:27:52.538312Z`.
 
 Actual generated tool `observed___identity_probe` arguments:
 
 
 ```json
 {
-  "experiment_id": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e"
+  "experiment_id": "f43426d5-e764-475f-a405-81da227365b3"
 }
 ```
 
@@ -1315,13 +1618,35 @@ Actual MCP result:
 ```json
 {
   "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
-  "experiment_id": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e",
+  "experiment_id": "f43426d5-e764-475f-a405-81da227365b3",
   "claims": {
     "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
     "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
     "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
     "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
-    "ver": "2.0"
+    "ver": "2.0",
+    "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+    "exp": 1793566559,
+    "iat": 1793479859
+  },
+  "tokenObservation": {
+    "boundary": "application MCP signature/issuer/audience/principal validation",
+    "validation": "VALIDATED_AT_MCP_BOUNDARY",
+    "header": {
+      "alg": "RS256",
+      "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+    },
+    "claims": {
+      "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+      "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+      "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+      "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+      "ver": "2.0",
+      "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+      "exp": 1793566559,
+      "iat": 1793479859
+    },
+    "tokenSha256": "a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394"
   }
 }
 ```
@@ -1334,46 +1659,68 @@ Custom MCP console `tools/call` query/result is correlated by the experiment UUI
 
 ```json
 {
-  "azureTimestamp": "2026-11-01T11:31:53.3344454+00:00",
+  "azureTimestamp": "2026-11-01T12:27:52.5269472+00:00",
   "event": "validated_mcp_exchange",
-  "timestamp": "2026-11-01T11:31:53.334220+00:00",
+  "timestamp": "2026-11-01T12:27:52.526770+00:00",
   "method": "tools/call",
   "tool": "identity_probe",
   "query": {
-    "experiment_id": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e"
+    "experiment_id": "f43426d5-e764-475f-a405-81da227365b3"
   },
   "result": {
     "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
-    "experiment_id": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e",
+    "experiment_id": "f43426d5-e764-475f-a405-81da227365b3",
     "claims": {
       "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
       "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
       "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
       "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
-      "ver": "2.0"
+      "ver": "2.0",
+      "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+      "exp": 1793566559,
+      "iat": 1793479859
+    },
+    "tokenObservation": {
+      "boundary": "application MCP signature/issuer/audience/principal validation",
+      "validation": "VALIDATED_AT_MCP_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+        "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+        "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+        "ver": "2.0",
+        "azp": "b8f21615-3829-4bb9-9a18-b878b0c80e06",
+        "exp": 1793566559,
+        "iat": 1793479859
+      },
+      "tokenSha256": "a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394"
     }
   }
 }
 ```
 
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:46:20.153693+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:33:20.964059+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:31:53.080653415+00:00`.
+UTC `2026-11-01T12:27:52.308447095+00:00`.
 
 
 ```text
-2026-11-01 11:31:53,080 INFO agent_framework: Function name: observed___identity_probe
+2026-11-01 12:27:52,308 INFO agent_framework: Function name: observed___identity_probe
 ```
 
 
-UTC `2026-11-01T11:31:53.325028462+00:00`.
+UTC `2026-11-01T12:27:52.514028510+00:00`.
 
 
 ```text
-2026-11-01 11:31:53,324 INFO agent_framework: Function observed___identity_probe succeeded.
+2026-11-01 12:27:52,513 INFO agent_framework: Function observed___identity_probe succeeded.
 ```
 
 
@@ -1383,13 +1730,13 @@ UTC `2026-11-01T11:31:53.325028462+00:00`.
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1`. Configured downstream target: `https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp` (configuration is not execution evidence).
 
-Caller-context SHA-256: `6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=`.
+Caller-context SHA-256: `7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=`.
 
 Exact captured request (only sensitive baggage redacted):
 
 
 ```json
-{"method":"tools/call","params":{"_meta":{"traceparent":"00-fea8003f21f77e6e51b4d1bf7796c674-25ada6bb63ddfb9a-01","baggage":"<baggage-redacted>","tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"name":"observed___identity_probe","arguments":{"experiment_id":"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e"}},"jsonrpc":"2.0","id":3}
+{"method":"tools/call","params":{"_meta":{"traceparent":"00-be791ba3a8604ebe6418c9a2457392fa-af1c239dccbc50d6-01","baggage":"<baggage-redacted>","tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"name":"observed___identity_probe","arguments":{"experiment_id":"f43426d5-e764-475f-a405-81da227365b3"}},"jsonrpc":"2.0","id":3}
 ```
 
 
@@ -1397,11 +1744,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {"_meta":{"tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"content":[{"type":"text","text":"{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\"}}"}],"isError":false,"structuredContent":{"marker":"CUSTOM_MCP_APPLICATION_VALIDATED","experiment_id":"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e","claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0"}}}
-}
+{"jsonrpc":"2.0","id":3,"result":{"_meta":{"tool_configuration":{"type":"mcp","name":"identity_probe","server_label":"observed","server_url":"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp","require_approval":"never","project_connection_id":"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data","original_type":"mcp"}},"content":[{"type":"text","text":"{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"f43426d5-e764-475f-a405-81da227365b3\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\",\"azp\":\"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\"exp\":1793566559,\"iat\":1793479859},\"tokenObservation\":{\"boundary\":\"application MCP signature/issuer/audience/principal validation\",\"validation\":\"VALIDATED_AT_MCP_BOUNDARY\",\"header\":{\"alg\":\"RS256\",\"kid\":\"ryBx-65jNoxH4FQH_6zarNjaNf4\"},\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\",\"azp\":\"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\"exp\":1793566559,\"iat\":1793479859},\"tokenSha256\":\"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\"}}"}],"isError":false,"structuredContent":{"marker":"CUSTOM_MCP_APPLICATION_VALIDATED","experiment_id":"f43426d5-e764-475f-a405-81da227365b3","claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0","azp":"b8f21615-3829-4bb9-9a18-b878b0c80e06","exp":1793566559,"iat":1793479859},"tokenObservation":{"boundary":"application MCP signature/issuer/audience/principal validation","validation":"VALIDATED_AT_MCP_BOUNDARY","header":{"alg":"RS256","kid":"ryBx-65jNoxH4FQH_6zarNjaNf4"},"claims":{"tid":"5dc82be3-90ab-4f72-a0f2-b2557ba694e3","oid":"42756227-4b4a-4a69-ab63-43c7f3e2b9fe","aud":"c0135af3-d0d3-410f-a1ce-8f2470f5dd93","iss":"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0","ver":"2.0","azp":"b8f21615-3829-4bb9-9a18-b878b0c80e06","exp":1793566559,"iat":1793479859},"tokenSha256":"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394"}}}}
 ```
 
 
@@ -1411,58 +1754,173 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "1a47fde3-303b-4b0e-ae38-83eb7aa3ca98",
+    "apimRequestId": "d19a4589-191a-4aec-b851-cb253b45a99d",
     "callerContextPresent": "True",
-    "callerContextHash": "6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=",
+    "callerContextHash": "7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=",
     "observedPlatformPrincipalId": "e2284463-607a-4080-b430-3fc63c778516",
-    "requestTimestamp": "2026-11-01T11:31:50.6718676Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e2284463-607a-4080-b430-3fc63c778516",
+        "appid": "e2284463-607a-4080-b430-3fc63c778516",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539670",
+        "iat": "1793535770"
+      },
+      "tokenSha256": "58d356c2dac0c815955b4295a12fff2892359552eae05f28cc5dbb4cd6245df1",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:50.5732344Z",
     "requestBody": "{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"sampling\":{}},\"clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"}},\"jsonrpc\":\"2.0\",\"id\":0}",
-    "responseTimestamp": "2026-11-01T11:31:50.8283179Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 0,\n  \"result\": {\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}\n}",
+    "responseTimestamp": "2026-11-01T12:27:50.7715158Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "4ce7f097-18d1-4fe6-b287-a63a37da9e23",
+    "apimRequestId": "678e8f2e-0469-42e7-813e-deb57287addc",
     "callerContextPresent": "True",
-    "callerContextHash": "6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=",
+    "callerContextHash": "7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=",
     "observedPlatformPrincipalId": "e2284463-607a-4080-b430-3fc63c778516",
-    "requestTimestamp": "2026-11-01T11:31:50.8413289Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e2284463-607a-4080-b430-3fc63c778516",
+        "appid": "e2284463-607a-4080-b430-3fc63c778516",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539670",
+        "iat": "1793535770"
+      },
+      "tokenSha256": "58d356c2dac0c815955b4295a12fff2892359552eae05f28cc5dbb4cd6245df1",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:50.789446Z",
     "requestBody": "{\"method\":\"notifications/initialized\",\"jsonrpc\":\"2.0\"}",
-    "responseTimestamp": "2026-11-01T11:31:50.8693776Z",
+    "responseTimestamp": "2026-11-01T12:27:50.8196282Z",
     "responseBody": "<empty-body>",
     "backendStatus": 204
   },
   {
-    "apimRequestId": "268a5819-ec9a-4422-8d53-2450266ae4af",
+    "apimRequestId": "d82a1c49-0bfb-4683-ac39-9d8d36d1c200",
     "callerContextPresent": "True",
-    "callerContextHash": "6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=",
+    "callerContextHash": "7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=",
     "observedPlatformPrincipalId": "e2284463-607a-4080-b430-3fc63c778516",
-    "requestTimestamp": "2026-11-01T11:31:50.9137721Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e2284463-607a-4080-b430-3fc63c778516",
+        "appid": "e2284463-607a-4080-b430-3fc63c778516",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539670",
+        "iat": "1793535770"
+      },
+      "tokenSha256": "58d356c2dac0c815955b4295a12fff2892359552eae05f28cc5dbb4cd6245df1",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:50.8600793Z",
     "requestBody": "{\"method\":\"ping\",\"jsonrpc\":\"2.0\",\"id\":1}",
-    "responseTimestamp": "2026-11-01T11:31:50.9423746Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {}\n}",
+    "responseTimestamp": "2026-11-01T12:27:50.9131835Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "0bc46561-e058-4fa7-9d12-39e10e5267ef",
+    "apimRequestId": "cdd6d312-0547-47a2-b064-2d558ae6ae20",
     "callerContextPresent": "True",
-    "callerContextHash": "6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=",
+    "callerContextHash": "7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=",
     "observedPlatformPrincipalId": "e2284463-607a-4080-b430-3fc63c778516",
-    "requestTimestamp": "2026-11-01T11:31:51.2195597Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e2284463-607a-4080-b430-3fc63c778516",
+        "appid": "e2284463-607a-4080-b430-3fc63c778516",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539670",
+        "iat": "1793535770"
+      },
+      "tokenSha256": "58d356c2dac0c815955b4295a12fff2892359552eae05f28cc5dbb4cd6245df1",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:50.9235648Z",
     "requestBody": "{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":2}",
-    "responseTimestamp": "2026-11-01T11:31:51.7460367Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"result\": {\"tools\":[{\"name\":\"observed___identity_probe\",\"description\":\"Return validated application identifiers for a nonsensitive experiment UUID.\",\"inputSchema\":{\"properties\":{\"experiment_id\":{\"type\":\"string\"}},\"required\":[\"experiment_id\"],\"type\":\"object\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"outputSchema\":{\"additionalProperties\":true,\"type\":\"object\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"_meta\":{\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}}}]}\n}",
+    "responseTimestamp": "2026-11-01T12:27:51.1727957Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"observed___identity_probe\",\"description\":\"Return validated application identifiers for a nonsensitive experiment UUID.\",\"inputSchema\":{\"properties\":{\"experiment_id\":{\"type\":\"string\"}},\"required\":[\"experiment_id\"],\"type\":\"object\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"outputSchema\":{\"additionalProperties\":true,\"type\":\"object\",\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"},\"_meta\":{\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}}}]}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "57b474e0-a134-412f-b590-0a01ffd6b783",
+    "apimRequestId": "f6b603a9-d6aa-4c9c-b1a0-3c78958e0f9a",
     "callerContextPresent": "True",
-    "callerContextHash": "6onNNuAjiWiwac4yWAXUJbyp+oAgupRO4S59gcFFxkU=",
+    "callerContextHash": "7V++xXmZd9sN8jOMay/GLVMBPCUjbfeJqmKW4DyfM3I=",
     "observedPlatformPrincipalId": "e2284463-607a-4080-b430-3fc63c778516",
-    "requestTimestamp": "2026-11-01T11:31:53.1160014Z",
-    "requestBody": "{\"method\":\"tools/call\",\"params\":{\"_meta\":{\"traceparent\":\"00-fea8003f21f77e6e51b4d1bf7796c674-25ada6bb63ddfb9a-01\",\"baggage\":\"<baggage-redacted>\",\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}},\"name\":\"observed___identity_probe\",\"arguments\":{\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\"}},\"jsonrpc\":\"2.0\",\"id\":3}",
-    "responseTimestamp": "2026-11-01T11:31:53.346469Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 3,\n  \"result\": {\"_meta\":{\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"marker\\\":\\\"CUSTOM_MCP_APPLICATION_VALIDATED\\\",\\\"experiment_id\\\":\\\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\\\",\\\"claims\\\":{\\\"tid\\\":\\\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\\\",\\\"oid\\\":\\\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\\\",\\\"aud\\\":\\\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\\\",\\\"iss\\\":\\\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\\\",\\\"ver\\\":\\\"2.0\\\"}}\"}],\"isError\":false,\"structuredContent\":{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\"}}}\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "e2284463-607a-4080-b430-3fc63c778516",
+        "appid": "e2284463-607a-4080-b430-3fc63c778516",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539670",
+        "iat": "1793535770"
+      },
+      "tokenSha256": "58d356c2dac0c815955b4295a12fff2892359552eae05f28cc5dbb4cd6245df1",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:52.3486869Z",
+    "requestBody": "{\"method\":\"tools/call\",\"params\":{\"_meta\":{\"traceparent\":\"00-be791ba3a8604ebe6418c9a2457392fa-af1c239dccbc50d6-01\",\"baggage\":\"<baggage-redacted>\",\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}},\"name\":\"observed___identity_probe\",\"arguments\":{\"experiment_id\":\"f43426d5-e764-475f-a405-81da227365b3\"}},\"jsonrpc\":\"2.0\",\"id\":3}",
+    "responseTimestamp": "2026-11-01T12:27:52.538312Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"_meta\":{\"tool_configuration\":{\"type\":\"mcp\",\"name\":\"identity_probe\",\"server_label\":\"observed\",\"server_url\":\"https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp\",\"require_approval\":\"never\",\"project_connection_id\":\"/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-a/connections/obs-20261031-a-custom-data\",\"original_type\":\"mcp\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"marker\\\":\\\"CUSTOM_MCP_APPLICATION_VALIDATED\\\",\\\"experiment_id\\\":\\\"f43426d5-e764-475f-a405-81da227365b3\\\",\\\"claims\\\":{\\\"tid\\\":\\\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\\\",\\\"oid\\\":\\\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\\\",\\\"aud\\\":\\\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\\\",\\\"iss\\\":\\\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\\\",\\\"ver\\\":\\\"2.0\\\",\\\"azp\\\":\\\"b8f21615-3829-4bb9-9a18-b878b0c80e06\\\",\\\"exp\\\":1793566559,\\\"iat\\\":1793479859},\\\"tokenObservation\\\":{\\\"boundary\\\":\\\"application MCP signature/issuer/audience/principal validation\\\",\\\"validation\\\":\\\"VALIDATED_AT_MCP_BOUNDARY\\\",\\\"header\\\":{\\\"alg\\\":\\\"RS256\\\",\\\"kid\\\":\\\"ryBx-65jNoxH4FQH_6zarNjaNf4\\\"},\\\"claims\\\":{\\\"tid\\\":\\\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\\\",\\\"oid\\\":\\\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\\\",\\\"aud\\\":\\\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\\\",\\\"iss\\\":\\\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\\\",\\\"ver\\\":\\\"2.0\\\",\\\"azp\\\":\\\"b8f21615-3829-4bb9-9a18-b878b0c80e06\\\",\\\"exp\\\":1793566559,\\\"iat\\\":1793479859},\\\"tokenSha256\\\":\\\"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\\\"}}\"}],\"isError\":false,\"structuredContent\":{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"f43426d5-e764-475f-a405-81da227365b3\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\",\"azp\":\"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\"exp\":1793566559,\"iat\":1793479859},\"tokenObservation\":{\"boundary\":\"application MCP signature/issuer/audience/principal validation\",\"validation\":\"VALIDATED_AT_MCP_BOUNDARY\",\"header\":{\"alg\":\"RS256\",\"kid\":\"ryBx-65jNoxH4FQH_6zarNjaNf4\"},\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\",\"azp\":\"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\"exp\":1793566559,\"iat\":1793479859},\"tokenSha256\":\"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\"}}}}",
     "backendStatus": 200
   }
 ]
@@ -1472,64 +1930,64 @@ All APIM exchanges for this invocation:
 Actual hosted response (sensitive consent/session identifiers redacted):
 
 
-```json
+````json
 {
-  "id": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+  "id": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
   "object": "response",
   "output": [
     {
       "type": "function_call",
-      "id": "fc_042de0d323ac21ca00qQCmVAgTODrgzMNSNixDqLxm6wI90rIl",
-      "call_id": "call_BUf9EZKP0N9znu7vmDa6NQ8A",
+      "id": "fc_0ee21261ad95b4c500UNyS5z7pxKTAOimjYUw47ZKllsutxxSY",
+      "call_id": "call_lsBxbAnBrwmmcVl6Pw90SLJE",
       "name": "observed___identity_probe",
-      "arguments": "{\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\"}",
+      "arguments": "{\"experiment_id\":\"f43426d5-e764-475f-a405-81da227365b3\"}",
       "status": "completed",
-      "response_id": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+      "response_id": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
       "agent_reference": null
     },
     {
       "type": "function_call_output",
-      "id": "fco_042de0d323ac21ca00pOh2Ar27wIyCrfJzdyOgQQRW0xAsfVHM",
-      "call_id": "call_BUf9EZKP0N9znu7vmDa6NQ8A",
-      "output": "{\"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\", \"experiment_id\": \"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\", \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\"}}",
+      "id": "fco_0ee21261ad95b4c500uMwmAFElE8z0bkfrzKRgT5h6T6cdDYzX",
+      "call_id": "call_lsBxbAnBrwmmcVl6Pw90SLJE",
+      "output": "{\"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\", \"experiment_id\": \"f43426d5-e764-475f-a405-81da227365b3\", \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\", \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\", \"exp\": 1793566559, \"iat\": 1793479859}, \"tokenObservation\": {\"boundary\": \"application MCP signature/issuer/audience/principal validation\", \"validation\": \"VALIDATED_AT_MCP_BOUNDARY\", \"header\": {\"alg\": \"RS256\", \"kid\": \"ryBx-65jNoxH4FQH_6zarNjaNf4\"}, \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\", \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\", \"exp\": 1793566559, \"iat\": 1793479859}, \"tokenSha256\": \"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\"}}",
       "status": "completed",
-      "response_id": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+      "response_id": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
       "agent_reference": null
     },
     {
       "type": "message",
-      "id": "msg_042de0d323ac21ca00FngnlXt6C5sOn57vVgHRrQakbLR8a78c",
+      "id": "msg_0ee21261ad95b4c500BkALQ6KjMv2s4CyjznlAogyyJ1dYk05W",
       "role": "assistant",
       "content": [
         {
           "type": "output_text",
-          "text": "{\"marker\":\"CUSTOM_MCP_APPLICATION_VALIDATED\",\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\",\"claims\":{\"tid\":\"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\"oid\":\"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\"aud\":\"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\"iss\":\"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\"ver\":\"2.0\"}}",
+          "text": "```json\n{\n  \"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\",\n  \"experiment_id\": \"f43426d5-e764-475f-a405-81da227365b3\",\n  \"claims\": {\n    \"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\n    \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\n    \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\n    \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\n    \"ver\": \"2.0\",\n    \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\n    \"exp\": 1793566559,\n    \"iat\": 1793479859\n  },\n  \"tokenObservation\": {\n    \"boundary\": \"application MCP signature/issuer/audience/principal validation\",\n    \"validation\": \"VALIDATED_AT_MCP_BOUNDARY\",\n    \"header\": {\n      \"alg\": \"RS256\",\n      \"kid\": \"ryBx-65jNoxH4FQH_6zarNjaNf4\"\n    },\n    \"claims\": {\n      \"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\",\n      \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\",\n      \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\",\n      \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\",\n      \"ver\": \"2.0\",\n      \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\",\n      \"exp\": 1793566559,\n      \"iat\": 1793479859\n    },\n    \"tokenSha256\": \"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\"\n  }\n}\n```",
           "annotations": [],
           "logprobs": []
         }
       ],
       "status": "completed",
-      "response_id": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+      "response_id": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
       "agent_reference": null
     }
   ],
-  "created_at": 1793532709,
+  "created_at": 1793536069,
   "parallel_tool_calls": false,
   "status": "completed",
-  "completed_at": 1793532715,
+  "completed_at": 1793536077,
   "usage": {
-    "input_tokens": 474,
+    "input_tokens": 792,
     "input_tokens_details": {
       "cached_tokens": 0,
       "cache_write_tokens": 0
     },
-    "output_tokens": 210,
+    "output_tokens": 599,
     "output_tokens_details": {
       "reasoning_tokens": 0
     },
-    "total_tokens": 684
+    "total_tokens": 1391
   },
-  "response_id": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+  "response_id": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-a-custom",
@@ -1539,7 +1997,7 @@ Actual hosted response (sensitive consent/session identifiers redacted):
   "agent_session_id": "<redacted>",
   "background": false
 }
-```
+````
 
 
 Runtime query result:
@@ -1550,422 +2008,398 @@ Runtime query result:
   "scenario": "a-custom",
   "agent": "obs-20261031-a-custom",
   "version": "1",
-  "experimentId": "4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e",
-  "responseId": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
-  "invocationStartedAt": "2026-11-01T11:31:40.631888+00:00",
-  "invocationCompletedAt": "2026-11-01T11:31:54.208049+00:00",
-  "queriedAt": "2026-11-01T11:46:20.153693+00:00",
+  "experimentId": "f43426d5-e764-475f-a405-81da227365b3",
+  "responseId": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
+  "invocationStartedAt": "2026-11-01T12:27:45.261444+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:56.744487+00:00",
+  "queriedAt": "2026-11-01T12:33:20.964059+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:40.401740514+00:00",
+      "timestamp": "2026-11-01T12:27:45.046351234+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:40.406532641+00:00",
+      "timestamp": "2026-11-01T12:27:45.052680767+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:40.891146604+00:00",
+      "timestamp": "2026-11-01T12:27:45.468780058+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:40,890 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:45,468 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.029591638+00:00",
+      "timestamp": "2026-11-01T12:27:45.602252154+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,029 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:45,602 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,059 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:45,636 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.060830193+00:00",
+      "timestamp": "2026-11-01T12:27:45.637063942+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.063488386+00:00",
+      "timestamp": "2026-11-01T12:27:45.639945772+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,063 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:45,639 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.063640334+00:00",
+      "timestamp": "2026-11-01T12:27:45.640116689+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,063 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:45,640 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.064060818+00:00",
+      "timestamp": "2026-11-01T12:27:45.640556779+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,064 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:45,640 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.064159357+00:00",
+      "timestamp": "2026-11-01T12:27:45.640651297+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,064 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:45,640 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.130607327+00:00",
+      "timestamp": "2026-11-01T12:27:45.710616671+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,130 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:45,710 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.131201626+00:00",
+      "timestamp": "2026-11-01T12:27:45.711411462+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,131 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:45,711 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.131425621+00:00",
+      "timestamp": "2026-11-01T12:27:45.711646629+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,131 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:45,711 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.131492988+00:00",
+      "timestamp": "2026-11-01T12:27:45.711715719+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,131 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:45,711 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.132532452+00:00",
+      "timestamp": "2026-11-01T12:27:45.712988439+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,131 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:45,711 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.132925198+00:00",
+      "timestamp": "2026-11-01T12:27:45.713650327+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:31:41 +0000] [36] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:45 +0000] [44] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.132944065+00:00",
+      "timestamp": "2026-11-01T12:27:45.713682223+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,132 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:45,713 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.500049878+00:00",
+      "timestamp": "2026-11-01T12:27:46.193514600+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,499 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 023834f65eb37d25d194817013df0a06)"
+      "line": "2026-11-01 12:27:46,193 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 19d8c94fa67a09f3353bb77adbe228f2)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.500860498+00:00",
+      "timestamp": "2026-11-01T12:27:46.194457723+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,500 INFO azure.ai.agentserver: 192.168.0.1:56198 \"GET /readiness 1.1\" 200 20 1163\u03bcs"
+      "line": "2026-11-01 12:27:46,194 INFO azure.ai.agentserver: 192.168.0.1:45138 \"GET /readiness 1.1\" 200 20 1282\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:41.501039588+00:00",
+      "timestamp": "2026-11-01T12:27:46.194646868+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:41,501 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.8ms (trace-id: 023834f65eb37d25d194817013df0a06)"
+      "line": "2026-11-01 12:27:46,194 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.9ms (trace-id: 19d8c94fa67a09f3353bb77adbe228f2)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:49.937530096+00:00",
+      "timestamp": "2026-11-01T12:27:49.903601887+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:49,937 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: fea8003f21f77e6e51b4d1bf7796c674, x-ms-client-request-id: dee580f2-b101-416d-b3ae-5596860b850d, trace-id: fea8003f21f77e6e51b4d1bf7796c674)"
+      "line": "2026-11-01 12:27:49,903 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: be791ba3a8604ebe6418c9a2457392fa, x-ms-client-request-id: 9abac633-2ca1-4b2d-b963-33892492769a, trace-id: be791ba3a8604ebe6418c9a2457392fa)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:49.942221258+00:00",
+      "timestamp": "2026-11-01T12:27:49.904897675+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:49,939 INFO azure.ai.agentserver: Creating response caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:49,904 INFO azure.ai.agentserver: Creating response caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:49.942221258+00:00",
+      "timestamp": "2026-11-01T12:27:49.905230320+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:49,940 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ"
+      "line": "2026-11-01 12:27:49,905 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.296195210+00:00",
+      "timestamp": "2026-11-01T12:27:50.425934418+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,296 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:50,425 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.802273924+00:00",
+      "timestamp": "2026-11-01T12:27:50.742960165+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,802 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:50,742 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.803897414+00:00",
+      "timestamp": "2026-11-01T12:27:50.745731791+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,803 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
+      "line": "2026-11-01 12:27:50,745 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.806878489+00:00",
+      "timestamp": "2026-11-01T12:27:50.750742098+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,806 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,750 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.807572232+00:00",
+      "timestamp": "2026-11-01T12:27:50.751540665+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,807 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,750 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.807697719+00:00",
+      "timestamp": "2026-11-01T12:27:50.751673303+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,807 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:50,751 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.844514207+00:00",
+      "timestamp": "2026-11-01T12:27:50.791369997+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,844 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 204 No Content\""
+      "line": "2026-11-01 12:27:50,791 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 204 No Content\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.845728174+00:00",
+      "timestamp": "2026-11-01T12:27:50.792330467+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,845 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,792 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.845929294+00:00",
+      "timestamp": "2026-11-01T12:27:50.792472248+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,845 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,792 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.846019495+00:00",
+      "timestamp": "2026-11-01T12:27:50.792558995+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,846 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:50,792 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.915813222+00:00",
+      "timestamp": "2026-11-01T12:27:50.883152640+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,915 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:50,883 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.918567712+00:00",
+      "timestamp": "2026-11-01T12:27:50.886412468+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,918 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,886 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.918712565+00:00",
+      "timestamp": "2026-11-01T12:27:50.886566407+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,918 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:50,886 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:50.918809458+00:00",
+      "timestamp": "2026-11-01T12:27:50.887030546+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:50,918 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:50,886 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:51.720794608+00:00",
+      "timestamp": "2026-11-01T12:27:51.143900663+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:51,720 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:51,143 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:51.835839833+00:00",
+      "timestamp": "2026-11-01T12:27:51.266200990+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:51,835 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token_info succeeded"
+      "line": "2026-11-01 12:27:51,266 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token_info succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:51.836094161+00:00",
+      "timestamp": "2026-11-01T12:27:51.266463947+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:51,836 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token_info succeeded"
+      "line": "2026-11-01 12:27:51,266 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token_info succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:51.836198115+00:00",
+      "timestamp": "2026-11-01T12:27:51.266570762+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:51,836 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:51,266 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:52.666196718+00:00",
+      "timestamp": "2026-11-01T12:27:51.971986187+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:52,666 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:51,971 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.080653415+00:00",
+      "timestamp": "2026-11-01T12:27:52.308447095+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,080 INFO agent_framework: Function name: observed___identity_probe"
+      "line": "2026-11-01 12:27:52,308 INFO agent_framework: Function name: observed___identity_probe"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.082899710+00:00",
+      "timestamp": "2026-11-01T12:27:52.310999924+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,082 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:52,310 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.083072001+00:00",
+      "timestamp": "2026-11-01T12:27:52.311188694+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,083 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:52,311 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.083158821+00:00",
+      "timestamp": "2026-11-01T12:27:52.311280658+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,083 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:52,311 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.320888861+00:00",
+      "timestamp": "2026-11-01T12:27:52.509024490+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,320 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:52,508 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-a-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.325028462+00:00",
+      "timestamp": "2026-11-01T12:27:52.514028510+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,324 INFO agent_framework: Function observed___identity_probe succeeded."
+      "line": "2026-11-01 12:27:52,513 INFO agent_framework: Function observed___identity_probe succeeded."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.325903429+00:00",
+      "timestamp": "2026-11-01T12:27:52.515008446+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,325 INFO agent_framework: Function duration: 0.244103s"
+      "line": "2026-11-01 12:27:52,514 INFO agent_framework: Function duration: 0.205277s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:53.888055614+00:00",
+      "timestamp": "2026-11-01T12:27:53.344328195+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:53,887 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:53,344 INFO httpx2: HTTP Request: POST https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com/api/projects/abc-a/openai/v1/responses \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:55.080147197+00:00",
+      "timestamp": "2026-11-01T12:27:57.667866485+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:55,080 INFO azure.ai.agentserver: Response caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ completed: status=completed output_count=3"
+      "line": "2026-11-01 12:27:57,667 INFO azure.ai.agentserver: Response caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7 completed: status=completed output_count=3"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:55.080519004+00:00",
+      "timestamp": "2026-11-01T12:27:57.669660305+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:55,080 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:57,668 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:55.081132546+00:00",
+      "timestamp": "2026-11-01T12:27:57.669660305+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:55,081 INFO azure.ai.agentserver: 192.168.0.1:50236 \"POST /responses 1.1\" 200 2317 5144800\u03bcs"
+      "line": "2026-11-01 12:27:57,669 INFO azure.ai.agentserver: 192.168.0.1:45140 \"POST /responses 1.1\" 200 4074 7766692\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:55.081341223+00:00",
+      "timestamp": "2026-11-01T12:27:57.669660305+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:55,081 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 5142.8ms (x-request-id: fea8003f21f77e6e51b4d1bf7796c674, x-ms-client-request-id: dee580f2-b101-416d-b3ae-5596860b850d, trace-id: fea8003f21f77e6e51b4d1bf7796c674)"
+      "line": "2026-11-01 12:27:57,669 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 7765.0ms (x-request-id: be791ba3a8604ebe6418c9a2457392fa, x-ms-client-request-id: 9abac633-2ca1-4b2d-b963-33892492769a, trace-id: be791ba3a8604ebe6418c9a2457392fa)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:55.081483403+00:00",
+      "timestamp": "2026-11-01T12:27:57.669660305+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:31:55,081 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:56.384616403+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:31:56,384 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported."
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:56.385631861+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:31:56,385 INFO azure.identity._credentials.environment: No environment configuration found."
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:56.386149927+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:31:56,386 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:31:56.617654955+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:31:56,617 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential\n"
+      "line": "2026-11-01 12:27:57,669 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -1988,21 +2422,21 @@ Local full sources: `evidence\observability-a-custom.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-a-custom.json#agentResponse",
-  "responseId": "caresp_042de0d323ac21ca00nAXJhV0xLy0eJw9L6tKnaq6XLSlvkSbJ",
+  "responseId": "caresp_0ee21261ad95b4c500YGaMLYNkOwpDeNYss4cvCRB0cEJp5zk7",
   "status": "completed",
   "error": null,
   "events": [
     {
       "type": "function_call",
       "name": "observed___identity_probe",
-      "call_id": "call_BUf9EZKP0N9znu7vmDa6NQ8A",
-      "arguments": "{\"experiment_id\":\"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\"}",
+      "call_id": "call_lsBxbAnBrwmmcVl6Pw90SLJE",
+      "arguments": "{\"experiment_id\":\"f43426d5-e764-475f-a405-81da227365b3\"}",
       "status": "completed"
     },
     {
       "type": "function_call_output",
-      "call_id": "call_BUf9EZKP0N9znu7vmDa6NQ8A",
-      "output": "{\"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\", \"experiment_id\": \"4d578de3-3c13-487f-bdfc-d4dbf8dd4c1e\", \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\"}}",
+      "call_id": "call_lsBxbAnBrwmmcVl6Pw90SLJE",
+      "output": "{\"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\", \"experiment_id\": \"f43426d5-e764-475f-a405-81da227365b3\", \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\", \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\", \"exp\": 1793566559, \"iat\": 1793479859}, \"tokenObservation\": {\"boundary\": \"application MCP signature/issuer/audience/principal validation\", \"validation\": \"VALIDATED_AT_MCP_BOUNDARY\", \"header\": {\"alg\": \"RS256\", \"kid\": \"ryBx-65jNoxH4FQH_6zarNjaNf4\"}, \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\", \"azp\": \"b8f21615-3829-4bb9-9a18-b878b0c80e06\", \"exp\": 1793566559, \"iat\": 1793479859}, \"tokenSha256\": \"a9b5f88a3c454503c005105e578fa5712a6a9c0377ab88adb5add806b644b394\"}}",
       "status": "completed"
     }
   ],
@@ -2260,7 +2694,82 @@ Fresh Azure hosted-agent executions on **November 1, 2026**, on the existing pin
 
 ### Live replay — b-native: BLOCKED_AGENT_INSTANCE_CONTEXT
 
-Agent `obs-20261031-b-native` v3; Toolbox v3. UTC `2026-11-01T11:32:54.514070+00:00` → `2026-11-01T11:33:05.989959+00:00`. Experiment `556675d4-b6fb-4aec-a21c-634b88955dc3`.
+Agent `obs-20261031-b-native` v3; Toolbox v3. UTC `2026-11-01T12:27:21.137372+00:00` → `2026-11-01T12:27:26.396389+00:00`. Experiment `c7f8806d-7c48-4b5f-94a8-87f5e0c44ea8`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:28.922658+00:00`. Configured agent instance principal `1f430487-d7ab-4b08-b99d-4e157099ab53`; project managed identity `a4c50f03-8b79-4946-8b6c-a6071f991eef`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `1f430487-d7ab-4b08-b99d-4e157099ab53` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | Configured: Agent identity; Search audience. No downstream JWT capture; do not substitute configured claims. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793541117,
+    "iat": 1793535744
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+    "appid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539646",
+    "iat": "1793535746"
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+The platform app token passes APIM validation, but Toolbox reports missing `AgentInstanceClientId` context. An `oid` matching the configured agent does not prove that Toolbox received all required agent-instance context. No successful downstream agent token/query was observed on this upstream route. Original B direct/native and its downstream Search gateway are distinct routes.
 
 **1. User input → actual hosted response**
 
@@ -2272,7 +2781,7 @@ Call retrieve_kb_b exactly once with arguments {"query": "Find the normal access
 ```
 
 
-Hosted HTTP **200**; response `caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM`; status **failed**.
+Hosted HTTP **200**; response `caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r`; status **failed**.
 
 Actual hosted error excerpt (full error in secondary capture):
 
@@ -2284,9 +2793,9 @@ An internal server error occurred.
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/list`; request `e80f567a-6c61-49c1-afaf-042e63bef531`; backend HTTP **200**.
+`tools/list`; request `f0c51840-6fd9-477c-aaa7-caa126240bca`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:33:06.3530183Z`; response `2026-11-01T11:33:06.878723Z`.
+UTC request `2026-11-01T12:27:27.0988403Z`; response `2026-11-01T12:27:27.352825Z`.
 
 **No `tools/call` query was produced.** The observed `tools/list` request is discovery, not a user search or tool query.
 
@@ -2304,7 +2813,7 @@ Exact discovery parameters:
     "io.modelcontextprotocol/clientCapabilities": {
       "sampling": {}
     },
-    "traceparent": "00-57583a76c05f4692ca147b1120cc874e-e91a8ed303f5fb24-01",
+    "traceparent": "00-3b0969ceba94c205102e8d2490c8c368-727aced811966255-01",
     "baggage": "<baggage-redacted>"
   }
 }
@@ -2323,15 +2832,15 @@ tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors"
 
 No correlated downstream `tools/call` query/result console event was retrieved. The observed error/consent blocks this captured route before a tool query; missing logs alone do not prove no execution.
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:45:48.676331+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:32:50.649657+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:33:06.857047523+00:00`.
+UTC `2026-11-01T12:27:27.338476750+00:00`.
 
 
 ```text
-2026-11-01 11:33:06,856 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM, error_type=ToolExecutionException).
+2026-11-01 12:27:27,337 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r, error_type=ToolExecutionException).
 ```
 
 
@@ -2341,13 +2850,13 @@ UTC `2026-11-01T11:33:06.857047523+00:00`.
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1`. Configured downstream target: `https://srchabcb7puse24s5tluc.search.windows.net/knowledgebases/kb-b/mcp?api-version=2026-05-01-preview` (configuration is not execution evidence).
 
-Caller-context SHA-256: `8YGs+YUDmmc23SIU3KOSzJ20h4+tLsObwc2dTVHw7PQ=`.
+Caller-context SHA-256: `TEixmZ4Nl1s3hKvaBXe1KYYMr/8tjfRwnpkRaLv5ikU=`.
 
 Exact captured request (only sensitive baggage redacted):
 
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-57583a76c05f4692ca147b1120cc874e-e91a8ed303f5fb24-01","baggage":"<baggage-redacted>"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-3b0969ceba94c205102e8d2490c8c368-727aced811966255-01","baggage":"<baggage-redacted>"}}}
 ```
 
 
@@ -2355,14 +2864,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "error": {
-    "code": -32007,
-    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/iq-b-primary'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'iq-b-primary' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"
-  }
-}
+{"jsonrpc":"2.0","id":2,"error":{"code":-32007,"message":"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/iq-b-primary'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'iq-b-primary' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"}}
 ```
 
 
@@ -2372,25 +2874,71 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "ae24bc9a-e218-46ac-87c4-fefeeda5e59c",
+    "apimRequestId": "76c25019-6984-4c5c-b0a7-f371fc2f5af3",
     "callerContextPresent": "True",
-    "callerContextHash": "8YGs+YUDmmc23SIU3KOSzJ20h4+tLsObwc2dTVHw7PQ=",
+    "callerContextHash": "TEixmZ4Nl1s3hKvaBXe1KYYMr/8tjfRwnpkRaLv5ikU=",
     "observedPlatformPrincipalId": "1f430487-d7ab-4b08-b99d-4e157099ab53",
-    "requestTimestamp": "2026-11-01T11:33:05.7787072Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-57583a76c05f4692ca147b1120cc874e-e441b420a41cfbf1-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:33:06.3215581Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+        "appid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539646",
+        "iat": "1793535746"
+      },
+      "tokenSha256": "4727c09ffabebd0ad469d60ac70148315deccdd99ba5c1a8e500e35f8c5ca96c",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:26.7373934Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-3b0969ceba94c205102e8d2490c8c368-8200784fec247cc9-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:26.9251402Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "e80f567a-6c61-49c1-afaf-042e63bef531",
+    "apimRequestId": "f0c51840-6fd9-477c-aaa7-caa126240bca",
     "callerContextPresent": "True",
-    "callerContextHash": "8YGs+YUDmmc23SIU3KOSzJ20h4+tLsObwc2dTVHw7PQ=",
+    "callerContextHash": "TEixmZ4Nl1s3hKvaBXe1KYYMr/8tjfRwnpkRaLv5ikU=",
     "observedPlatformPrincipalId": "1f430487-d7ab-4b08-b99d-4e157099ab53",
-    "requestTimestamp": "2026-11-01T11:33:06.3530183Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-57583a76c05f4692ca147b1120cc874e-e91a8ed303f5fb24-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:33:06.878723Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"error\": {\n    \"code\": -32007,\n    \"message\": \"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/iq-b-primary'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'iq-b-primary' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\\\"}}]}\"\n  }\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+        "appid": "1f430487-d7ab-4b08-b99d-4e157099ab53",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539646",
+        "iat": "1793535746"
+      },
+      "tokenSha256": "4727c09ffabebd0ad469d60ac70148315deccdd99ba5c1a8e500e35f8c5ca96c",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:27.0988403Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-3b0969ceba94c205102e8d2490c8c368-727aced811966255-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:27.352825Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32007,\"message\":\"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/iq-b-primary'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'iq-b-primary' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\\\"}}]}\"}}",
     "backendStatus": 200
   }
 ]
@@ -2402,17 +2950,17 @@ Actual hosted response (sensitive consent/session identifiers redacted):
 
 ```json
 {
-  "id": "caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM",
+  "id": "caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r",
   "object": "response",
   "output": [],
-  "created_at": 1793532784,
+  "created_at": 1793536045,
   "error": {
     "code": "server_error",
     "message": "An internal server error occurred."
   },
   "parallel_tool_calls": false,
   "status": "failed",
-  "response_id": "caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM",
+  "response_id": "caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-b-native",
@@ -2433,296 +2981,290 @@ Runtime query result:
   "scenario": "b-native",
   "agent": "obs-20261031-b-native",
   "version": "3",
-  "experimentId": "556675d4-b6fb-4aec-a21c-634b88955dc3",
-  "responseId": "caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM",
-  "invocationStartedAt": "2026-11-01T11:32:54.514070+00:00",
-  "invocationCompletedAt": "2026-11-01T11:33:05.989959+00:00",
-  "queriedAt": "2026-11-01T11:45:48.676331+00:00",
+  "experimentId": "c7f8806d-7c48-4b5f-94a8-87f5e0c44ea8",
+  "responseId": "caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r",
+  "invocationStartedAt": "2026-11-01T12:27:21.137372+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:26.396389+00:00",
+  "queriedAt": "2026-11-01T12:32:50.649657+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.206006339+00:00",
+      "timestamp": "2026-11-01T12:27:21.173934308+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.214327395+00:00",
+      "timestamp": "2026-11-01T12:27:21.181677856+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.613580436+00:00",
+      "timestamp": "2026-11-01T12:27:21.599721436+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,613 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:21,599 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.744657423+00:00",
+      "timestamp": "2026-11-01T12:27:21.735003402+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,744 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:21,734 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,776 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:21,768 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.777733633+00:00",
+      "timestamp": "2026-11-01T12:27:21.768901885+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.780430969+00:00",
+      "timestamp": "2026-11-01T12:27:21.771787084+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,780 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:21,771 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.780587484+00:00",
+      "timestamp": "2026-11-01T12:27:21.771953030+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,780 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:21,771 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.781003245+00:00",
+      "timestamp": "2026-11-01T12:27:21.772377613+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,780 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:21,772 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.781102878+00:00",
+      "timestamp": "2026-11-01T12:27:21.772471153+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,781 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:21,772 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.939579634+00:00",
+      "timestamp": "2026-11-01T12:27:21.937272754+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,939 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:21,937 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.940401575+00:00",
+      "timestamp": "2026-11-01T12:27:21.938176482+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,940 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:21,938 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.940643652+00:00",
+      "timestamp": "2026-11-01T12:27:21.938431283+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,940 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:21,938 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.940718373+00:00",
+      "timestamp": "2026-11-01T12:27:21.938501009+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,940 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:21,938 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.941981532+00:00",
+      "timestamp": "2026-11-01T12:27:21.939755060+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,940 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:21,938 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.942474877+00:00",
+      "timestamp": "2026-11-01T12:27:21.940265441+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:32:54 +0000] [43] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:21 +0000] [42] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:54.942497819+00:00",
+      "timestamp": "2026-11-01T12:27:21.940288628+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:54,942 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:21,940 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:55.387620570+00:00",
+      "timestamp": "2026-11-01T12:27:22.081747647+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:55,387 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 7479006397cff6a7f5b39202ffd17bfc)"
+      "line": "2026-11-01 12:27:22,081 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 921b2094f58bef598c99ed544f1078c0)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:55.388511899+00:00",
+      "timestamp": "2026-11-01T12:27:22.082571844+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:55,388 INFO azure.ai.agentserver: 192.168.0.1:38012 \"GET /readiness 1.1\" 200 20 1356\u03bcs"
+      "line": "2026-11-01 12:27:22,082 INFO azure.ai.agentserver: 192.168.0.1:47384 \"GET /readiness 1.1\" 200 20 988\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:32:55.388705859+00:00",
+      "timestamp": "2026-11-01T12:27:22.082761467+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:32:55,388 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.9ms (trace-id: 7479006397cff6a7f5b39202ffd17bfc)"
+      "line": "2026-11-01 12:27:22,082 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.8ms (trace-id: 921b2094f58bef598c99ed544f1078c0)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:04.787255642+00:00",
+      "timestamp": "2026-11-01T12:27:25.698111860+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:04,787 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 57583a76c05f4692ca147b1120cc874e, x-ms-client-request-id: 64c8b009-8f24-4a97-bb37-32b017f64adb, trace-id: 57583a76c05f4692ca147b1120cc874e)"
+      "line": "2026-11-01 12:27:25,697 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 3b0969ceba94c205102e8d2490c8c368, x-ms-client-request-id: 1ce0c194-3c05-4288-99bb-78aed4c41ded, trace-id: 3b0969ceba94c205102e8d2490c8c368)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:04.790338917+00:00",
+      "timestamp": "2026-11-01T12:27:25.699018204+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:04,788 INFO azure.ai.agentserver: Creating response caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:25,698 INFO azure.ai.agentserver: Creating response caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:04.790338917+00:00",
+      "timestamp": "2026-11-01T12:27:25.699331391+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:04,788 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM"
+      "line": "2026-11-01 12:27:25,699 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:04.790338917+00:00",
+      "timestamp": "2026-11-01T12:27:25.700232507+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:04,788 INFO azure.identity._credentials.environment: No environment configuration found."
+      "line": "2026-11-01 12:27:25,700 INFO azure.identity._credentials.environment: No environment configuration found."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:04.790338917+00:00",
+      "timestamp": "2026-11-01T12:27:25.700655484+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:04,789 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
+      "line": "2026-11-01 12:27:25,700 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:05.398093082+00:00",
+      "timestamp": "2026-11-01T12:27:26.352843076+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:05,397 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:26,352 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.296506162+00:00",
+      "timestamp": "2026-11-01T12:27:26.915263992+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,296 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:26,914 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.316464030+00:00",
+      "timestamp": "2026-11-01T12:27:26.947840190+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,316 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:26,947 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.317799717+00:00",
+      "timestamp": "2026-11-01T12:27:26.950311527+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,316 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:26,948 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.317967727+00:00",
+      "timestamp": "2026-11-01T12:27:26.950558006+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,317 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:26,950 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.853341917+00:00",
+      "timestamp": "2026-11-01T12:27:27.334203205+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,853 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:27,334 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.857047523+00:00",
+      "timestamp": "2026-11-01T12:27:27.338476750+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,856 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM, error_type=ToolExecutionException)."
+      "line": "2026-11-01 12:27:27,337 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r, error_type=ToolExecutionException)."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.857704058+00:00",
+      "timestamp": "2026-11-01T12:27:27.339158171+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,857 INFO azure.ai.agentserver: Response caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM completed: status=failed output_count=0"
+      "line": "2026-11-01 12:27:27,339 INFO azure.ai.agentserver: Response caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r completed: status=failed output_count=0"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.860244471+00:00",
+      "timestamp": "2026-11-01T12:27:27.342196035+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,859 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:27,341 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.860977628+00:00",
+      "timestamp": "2026-11-01T12:27:27.343028252+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,860 INFO azure.ai.agentserver: 192.168.0.1:58414 \"POST /responses 1.1\" 200 513 2074122\u03bcs"
+      "line": "2026-11-01 12:27:27,342 INFO azure.ai.agentserver: 192.168.0.1:47388 \"POST /responses 1.1\" 200 513 1645303\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.861224589+00:00",
+      "timestamp": "2026-11-01T12:27:27.343296427+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,861 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 2073.7ms (x-request-id: 57583a76c05f4692ca147b1120cc874e, x-ms-client-request-id: 64c8b009-8f24-4a97-bb37-32b017f64adb, trace-id: 57583a76c05f4692ca147b1120cc874e)"
+      "line": "2026-11-01 12:27:27,343 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 1644.9ms (x-request-id: 3b0969ceba94c205102e8d2490c8c368, x-ms-client-request-id: 1ce0c194-3c05-4288-99bb-78aed4c41ded, trace-id: 3b0969ceba94c205102e8d2490c8c368)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.861372517+00:00",
+      "timestamp": "2026-11-01T12:27:27.343480450+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:06,861 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
-    },
-    {
-      "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:06.869070061+00:00",
-      "stream": "stderr",
-      "line": "2026-11-01 11:33:06,869 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
+      "line": "2026-11-01 12:27:27,343 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -2745,7 +3287,7 @@ Local full sources: `evidence\observability-b-native.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-b-native.json#agentResponse",
-  "responseId": "caresp_01b1a5e25eb686ba00nAqkei63O1CxTFvr7U0l7hEIANUnfGvM",
+  "responseId": "caresp_0598b33ea9b0847400R39KnXKmpR9sf9lxULRy12oR6yxwX55r",
   "status": "failed",
   "error": {
     "code": "server_error",
@@ -2762,7 +3304,82 @@ Local full sources: `evidence\observability-b-native.json`, `evidence\observabil
 
 ### Live replay — b-custom: BLOCKED_AGENT_INSTANCE_CONTEXT
 
-Agent `obs-20261031-b-custom` v2; Toolbox v2. UTC `2026-11-01T11:33:55.363434+00:00` → `2026-11-01T11:34:07.890199+00:00`. Experiment `3245f2aa-8d99-4933-8aef-ba9bc5a998d4`.
+Agent `obs-20261031-b-custom` v2; Toolbox v2. UTC `2026-11-01T12:27:47.370569+00:00` → `2026-11-01T12:27:53.310103+00:00`. Experiment `f9291499-7021-47d1-b81f-f8bd7a6e6af2`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:33.173298+00:00`. Configured agent instance principal `d6fb1ff2-6587-4169-b279-20103b371ab7`; project managed identity `a4c50f03-8b79-4946-8b6c-a6071f991eef`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `d6fb1ff2-6587-4169-b279-20103b371ab7` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | Configured: Agent identity; custom application audience. No downstream JWT capture; do not substitute configured claims. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793540182,
+    "iat": 1793535771
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+    "appid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539673",
+    "iat": "1793535773"
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+The platform app token passes APIM validation, but Toolbox reports missing `AgentInstanceClientId` context. An `oid` matching the configured agent does not prove that Toolbox received all required agent-instance context. No successful downstream agent token/query was observed on this upstream route. Original B direct/native and its downstream Search gateway are distinct routes.
 
 **1. User input → actual hosted response**
 
@@ -2770,11 +3387,11 @@ Exact submitted user prompt (not the generated MCP arguments):
 
 
 ```text
-Call identity_probe exactly once with arguments {"experiment_id": "3245f2aa-8d99-4933-8aef-ba9bc5a998d4"}. Return its exact result.
+Call identity_probe exactly once with arguments {"experiment_id": "f9291499-7021-47d1-b81f-f8bd7a6e6af2"}. Return its exact result.
 ```
 
 
-Hosted HTTP **200**; response `caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu`; status **failed**.
+Hosted HTTP **200**; response `caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg`; status **failed**.
 
 Actual hosted error excerpt (full error in secondary capture):
 
@@ -2786,9 +3403,9 @@ An internal server error occurred.
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/list`; request `a93d79f7-39c6-40ba-aad9-d774f1e4c0e2`; backend HTTP **200**.
+`tools/list`; request `a18e7b60-c912-4cba-8a7d-29b8423fa123`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:34:08.35145Z`; response `2026-11-01T11:34:08.7753488Z`.
+UTC request `2026-11-01T12:27:54.0329453Z`; response `2026-11-01T12:27:54.264263Z`.
 
 **No `tools/call` query was produced.** The observed `tools/list` request is discovery, not a user search or tool query.
 
@@ -2806,7 +3423,7 @@ Exact discovery parameters:
     "io.modelcontextprotocol/clientCapabilities": {
       "sampling": {}
     },
-    "traceparent": "00-f7ba87c30a659da09d35ca485f729048-03a27e45381f5ffe-01",
+    "traceparent": "00-826510e64f100d661561e52df6798df9-90910c1c750a647c-01",
     "baggage": "<baggage-redacted>"
   }
 }
@@ -2825,15 +3442,15 @@ tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors"
 
 No correlated downstream `tools/call` query/result console event was retrieved. The observed error/consent blocks this captured route before a tool query; missing logs alone do not prove no execution.
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:46:33.387469+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:33:30.544850+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:34:08.757078772+00:00`.
+UTC `2026-11-01T12:27:54.241027981+00:00`.
 
 
 ```text
-2026-11-01 11:34:08,756 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu, error_type=ToolExecutionException).
+2026-11-01 12:27:54,240 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg, error_type=ToolExecutionException).
 ```
 
 
@@ -2843,13 +3460,13 @@ UTC `2026-11-01T11:34:08.757078772+00:00`.
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1`. Configured downstream target: `https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp` (configuration is not execution evidence).
 
-Caller-context SHA-256: `niWeK9gjh8rD2RP4u3C7hr/y/kWTUoFxGZEHl1ZbWEE=`.
+Caller-context SHA-256: `1/Vs/816eT2TQGo/UzJvhgTSirt0zRd3xeUhzQNsgd8=`.
 
 Exact captured request (only sensitive baggage redacted):
 
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-f7ba87c30a659da09d35ca485f729048-03a27e45381f5ffe-01","baggage":"<baggage-redacted>"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-826510e64f100d661561e52df6798df9-90910c1c750a647c-01","baggage":"<baggage-redacted>"}}}
 ```
 
 
@@ -2857,14 +3474,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "error": {
-    "code": -32007,
-    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/obs-20261031-b-custom-data'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'obs-20261031-b-custom-data' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"
-  }
-}
+{"jsonrpc":"2.0","id":2,"error":{"code":-32007,"message":"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/obs-20261031-b-custom-data'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'obs-20261031-b-custom-data' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\"}}]}"}}
 ```
 
 
@@ -2874,25 +3484,71 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "3b911b43-edc6-47b4-90d4-52a9b97fedd3",
+    "apimRequestId": "df5bc0ff-51f5-486c-bb20-f5b310563a4b",
     "callerContextPresent": "True",
-    "callerContextHash": "niWeK9gjh8rD2RP4u3C7hr/y/kWTUoFxGZEHl1ZbWEE=",
+    "callerContextHash": "1/Vs/816eT2TQGo/UzJvhgTSirt0zRd3xeUhzQNsgd8=",
     "observedPlatformPrincipalId": "d6fb1ff2-6587-4169-b279-20103b371ab7",
-    "requestTimestamp": "2026-11-01T11:34:08.0872851Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-f7ba87c30a659da09d35ca485f729048-7c6fe98bd3ebed82-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:34:08.3015446Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+        "appid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539673",
+        "iat": "1793535773"
+      },
+      "tokenSha256": "067d5d4c719c3a89513885cb71126c33751f1b8e533159245d18fc2cebb891d0",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:53.7852485Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-826510e64f100d661561e52df6798df9-1a704eee0107ee9f-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:53.9941511Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "a93d79f7-39c6-40ba-aad9-d774f1e4c0e2",
+    "apimRequestId": "a18e7b60-c912-4cba-8a7d-29b8423fa123",
     "callerContextPresent": "True",
-    "callerContextHash": "niWeK9gjh8rD2RP4u3C7hr/y/kWTUoFxGZEHl1ZbWEE=",
+    "callerContextHash": "1/Vs/816eT2TQGo/UzJvhgTSirt0zRd3xeUhzQNsgd8=",
     "observedPlatformPrincipalId": "d6fb1ff2-6587-4169-b279-20103b371ab7",
-    "requestTimestamp": "2026-11-01T11:34:08.35145Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-f7ba87c30a659da09d35ca485f729048-03a27e45381f5ffe-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:34:08.7753488Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"error\": {\n    \"code\": -32007,\n    \"message\": \"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/obs-20261031-b-custom-data'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'obs-20261031-b-custom-data' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\\\"}}]}\"\n  }\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+        "appid": "d6fb1ff2-6587-4169-b279-20103b371ab7",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539673",
+        "iat": "1793535773"
+      },
+      "tokenSha256": "067d5d4c719c3a89513885cb71126c33751f1b8e533159245d18fc2cebb891d0",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:54.0329453Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-826510e64f100d661561e52df6798df9-90910c1c750a647c-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:54.264263Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32007,\"message\":\"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-b/connections/obs-20261031-b-custom-data'. HTTP status: BadRequest. Reason: AgenticIdentityToken auth type for connection 'obs-20261031-b-custom-data' requires AgentInstanceClientId and AgentBlueprintClientId, or an ApplicationName.\\\"}}]}\"}}",
     "backendStatus": 200
   }
 ]
@@ -2904,17 +3560,17 @@ Actual hosted response (sensitive consent/session identifiers redacted):
 
 ```json
 {
-  "id": "caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu",
+  "id": "caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg",
   "object": "response",
   "output": [],
-  "created_at": 1793532847,
+  "created_at": 1793536072,
   "error": {
     "code": "server_error",
     "message": "An internal server error occurred."
   },
   "parallel_tool_calls": false,
   "status": "failed",
-  "response_id": "caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu",
+  "response_id": "caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-b-custom",
@@ -2935,296 +3591,296 @@ Runtime query result:
   "scenario": "b-custom",
   "agent": "obs-20261031-b-custom",
   "version": "2",
-  "experimentId": "3245f2aa-8d99-4933-8aef-ba9bc5a998d4",
-  "responseId": "caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu",
-  "invocationStartedAt": "2026-11-01T11:33:55.363434+00:00",
-  "invocationCompletedAt": "2026-11-01T11:34:07.890199+00:00",
-  "queriedAt": "2026-11-01T11:46:33.387469+00:00",
+  "experimentId": "f9291499-7021-47d1-b81f-f8bd7a6e6af2",
+  "responseId": "caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg",
+  "invocationStartedAt": "2026-11-01T12:27:47.370569+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:53.310103+00:00",
+  "queriedAt": "2026-11-01T12:33:30.544850+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:54.943190441+00:00",
+      "timestamp": "2026-11-01T12:27:47.205076627+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:54.950515049+00:00",
+      "timestamp": "2026-11-01T12:27:47.213004615+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.360515698+00:00",
+      "timestamp": "2026-11-01T12:27:47.619905932+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,360 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:47,619 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.493663601+00:00",
+      "timestamp": "2026-11-01T12:27:47.759232890+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,493 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:47,759 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,525 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:47,792 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.526666608+00:00",
+      "timestamp": "2026-11-01T12:27:47.793848126+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.529394024+00:00",
+      "timestamp": "2026-11-01T12:27:47.796742151+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,529 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:47,796 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.529550930+00:00",
+      "timestamp": "2026-11-01T12:27:47.796917500+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,529 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:47,796 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.529977589+00:00",
+      "timestamp": "2026-11-01T12:27:47.797397351+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,529 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:47,797 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.530069091+00:00",
+      "timestamp": "2026-11-01T12:27:47.797534514+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,530 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:47,797 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.685916858+00:00",
+      "timestamp": "2026-11-01T12:27:47.961703386+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,685 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:47,961 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.686808003+00:00",
+      "timestamp": "2026-11-01T12:27:47.962621297+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,686 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:47,962 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.687057274+00:00",
+      "timestamp": "2026-11-01T12:27:47.962869041+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,687 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:47,962 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.687128794+00:00",
+      "timestamp": "2026-11-01T12:27:47.962939726+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,687 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:47,962 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.688355006+00:00",
+      "timestamp": "2026-11-01T12:27:47.964328732+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,687 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:47,963 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.688910692+00:00",
+      "timestamp": "2026-11-01T12:27:47.964954611+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:33:55 +0000] [44] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:47 +0000] [44] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:55.688937539+00:00",
+      "timestamp": "2026-11-01T12:27:47.964984976+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:55,688 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:47,964 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:56.231936511+00:00",
+      "timestamp": "2026-11-01T12:27:48.302906543+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:56,231 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: b9b20f898c196b8a21aac4ab69ccfb3a)"
+      "line": "2026-11-01 12:27:48,302 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 080158efe8ca6d9942a5bbef488b4aea)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:56.232807477+00:00",
+      "timestamp": "2026-11-01T12:27:48.303895972+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:56,232 INFO azure.ai.agentserver: 192.168.0.1:41298 \"GET /readiness 1.1\" 200 20 1141\u03bcs"
+      "line": "2026-11-01 12:27:48,303 INFO azure.ai.agentserver: 192.168.0.1:40314 \"GET /readiness 1.1\" 200 20 1307\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:33:56.233006758+00:00",
+      "timestamp": "2026-11-01T12:27:48.304096268+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:33:56,232 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.9ms (trace-id: b9b20f898c196b8a21aac4ab69ccfb3a)"
+      "line": "2026-11-01 12:27:48,304 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.9ms (trace-id: 080158efe8ca6d9942a5bbef488b4aea)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.049556761+00:00",
+      "timestamp": "2026-11-01T12:27:52.712409612+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,049 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: f7ba87c30a659da09d35ca485f729048, x-ms-client-request-id: c206a246-a07a-49da-8cf2-b563693ed167, trace-id: f7ba87c30a659da09d35ca485f729048)"
+      "line": "2026-11-01 12:27:52,712 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 826510e64f100d661561e52df6798df9, x-ms-client-request-id: 1e3ec5f4-1caa-4262-bb9c-05cd780875b1, trace-id: 826510e64f100d661561e52df6798df9)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.050264469+00:00",
+      "timestamp": "2026-11-01T12:27:52.713784797+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,050 INFO azure.ai.agentserver: Creating response caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:52,713 INFO azure.ai.agentserver: Creating response caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.050553544+00:00",
+      "timestamp": "2026-11-01T12:27:52.714181261+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,050 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu"
+      "line": "2026-11-01 12:27:52,714 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.051083466+00:00",
+      "timestamp": "2026-11-01T12:27:52.714786803+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,051 INFO azure.identity._credentials.environment: No environment configuration found."
+      "line": "2026-11-01 12:27:52,714 INFO azure.identity._credentials.environment: No environment configuration found."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.051447860+00:00",
+      "timestamp": "2026-11-01T12:27:52.715259032+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,051 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
+      "line": "2026-11-01 12:27:52,715 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:07.917654213+00:00",
+      "timestamp": "2026-11-01T12:27:53.605693369+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:07,917 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:53,605 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.283768856+00:00",
+      "timestamp": "2026-11-01T12:27:53.969341025+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,283 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:53,969 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.306350111+00:00",
+      "timestamp": "2026-11-01T12:27:53.994664189+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,306 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:53,991 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.307710042+00:00",
+      "timestamp": "2026-11-01T12:27:53.994664189+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,306 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:53,991 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.307891220+00:00",
+      "timestamp": "2026-11-01T12:27:53.994664189+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,307 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:53,993 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.752247024+00:00",
+      "timestamp": "2026-11-01T12:27:54.235676613+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,752 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:54,235 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-b-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.757078772+00:00",
+      "timestamp": "2026-11-01T12:27:54.241027981+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,756 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu, error_type=ToolExecutionException)."
+      "line": "2026-11-01 12:27:54,240 ERROR agent_framework_foundry_hosting._responses: Hosted Responses failure (phase=agent initialization, response_id=caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg, error_type=ToolExecutionException)."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.757843225+00:00",
+      "timestamp": "2026-11-01T12:27:54.241841480+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,757 INFO azure.ai.agentserver: Response caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu completed: status=failed output_count=0"
+      "line": "2026-11-01 12:27:54,241 INFO azure.ai.agentserver: Response caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg completed: status=failed output_count=0"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.760246488+00:00",
+      "timestamp": "2026-11-01T12:27:54.244909999+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,759 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:54,244 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.761413506+00:00",
+      "timestamp": "2026-11-01T12:27:54.245818537+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,761 INFO azure.ai.agentserver: 192.168.0.1:58632 \"POST /responses 1.1\" 200 513 1712108\u03bcs"
+      "line": "2026-11-01 12:27:54,245 INFO azure.ai.agentserver: 192.168.0.1:40330 \"POST /responses 1.1\" 200 513 1533887\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.761686907+00:00",
+      "timestamp": "2026-11-01T12:27:54.246102969+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,761 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 1711.9ms (x-request-id: f7ba87c30a659da09d35ca485f729048, x-ms-client-request-id: c206a246-a07a-49da-8cf2-b563693ed167, trace-id: f7ba87c30a659da09d35ca485f729048)"
+      "line": "2026-11-01 12:27:54,246 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 1533.0ms (x-request-id: 826510e64f100d661561e52df6798df9, x-ms-client-request-id: 1e3ec5f4-1caa-4262-bb9c-05cd780875b1, trace-id: 826510e64f100d661561e52df6798df9)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.761840392+00:00",
+      "timestamp": "2026-11-01T12:27:54.246277151+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,761 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:54,246 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:08.769546736+00:00",
+      "timestamp": "2026-11-01T12:27:54.254793019+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:08,769 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
+      "line": "2026-11-01 12:27:54,254 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported."
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -3247,7 +3903,7 @@ Local full sources: `evidence\observability-b-custom.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-b-custom.json#agentResponse",
-  "responseId": "caresp_0946eead73318ecd00J7D5eY0cqb2lVLEV5avVDWH9nmSfxbmu",
+  "responseId": "caresp_0b85a145389652e700ydyQDfi1MmnmdpdYa5BfpcqFfPAK6fYg",
   "status": "failed",
   "error": {
     "code": "server_error",
@@ -3403,7 +4059,82 @@ Fresh Azure hosted-agent executions on **November 1, 2026**, on the existing pin
 
 ### Live replay — c-native: BLOCKED_PLATFORM_USER_TOKEN_FLOW
 
-Agent `obs-20261031-c-native` v2; Toolbox v2. UTC `2026-11-01T11:34:57.231496+00:00` → `2026-11-01T11:35:14.968297+00:00`. Experiment `7f4f5874-6c7f-4187-8a6e-ab38ca0464f1`.
+Agent `obs-20261031-c-native` v2; Toolbox v2. UTC `2026-11-01T12:27:15.187455+00:00` → `2026-11-01T12:27:23.902184+00:00`. Experiment `d791f5ca-24a5-4d8f-ab04-dffc0f08c50e`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:29.187732+00:00`. Configured agent instance principal `8c2d2573-9c63-42cd-86c0-ce807db9edcf`; project managed identity `1a04abde-08e9-4949-b975-b2520119ca1d`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `8c2d2573-9c63-42cd-86c0-ce807db9edcf` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | Configured: Managed user identity; Search audience/scopes. No downstream JWT capture; do not substitute configured claims. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793540065,
+    "iat": 1793535738
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+    "appid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539640",
+    "iat": "1793535740"
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+The caller's delegated `scp` is not a downstream Search scope. This replay fails with `AADSTS500016` before a query; managed user token acquisition is configured, but no backend user token or internal OBO grant is observed.
 
 **1. User input → actual hosted response**
 
@@ -3415,7 +4146,7 @@ Call retrieve_kb_c exactly once with arguments {"query": "Find the normal access
 ```
 
 
-Hosted HTTP **200**; response `caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65`; status **failed**.
+Hosted HTTP **200**; response `caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO`; status **failed**.
 
 Actual hosted error excerpt (full error in secondary capture):
 
@@ -3427,9 +4158,9 @@ Actual hosted error excerpt (full error in secondary capture):
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/list`; request `468be3c0-cf32-4db7-97e2-71798f6d5eb1`; backend HTTP **200**.
+`tools/list`; request `245344ed-e243-488f-a0bf-8834466df825`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:35:15.0648224Z`; response `2026-11-01T11:35:15.8619238Z`.
+UTC request `2026-11-01T12:27:24.0730473Z`; response `2026-11-01T12:27:24.8556212Z`.
 
 **No `tools/call` query was produced.** The observed `tools/list` request is discovery, not a user search or tool query.
 
@@ -3453,19 +4184,19 @@ tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors"
 
 No correlated downstream `tools/call` query/result console event was retrieved. The observed error/consent blocks this captured route before a tool query; missing logs alone do not prove no execution.
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:45:59.582499+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:33:00.437513+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:35:15.845855489+00:00`.
+UTC `2026-11-01T12:27:24.839939773+00:00`.
 
 
 ```text
-2026-11-01 11:35:15,841 ERROR agent_framework_foundry_hosting._responses: Failed to prepare agent: ('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors":[{"name":"observed","type":"mcp","error":{"code":"HTTP_400","message":"Connection resolution failed for \'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.Cog
+2026-11-01 12:27:24,835 ERROR agent_framework_foundry_hosting._responses: Failed to prepare agent: ('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors":[{"name":"observed","type":"mcp","error":{"code":"HTTP_400","message":"Connection resolution failed for \'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.Cog
 ```
 
 
-UTC `2026-11-01T11:35:15.845855489+00:00`.
+UTC `2026-11-01T12:27:24.839939773+00:00`.
 
 
 ```text
@@ -3479,7 +4210,7 @@ mcp.shared.exceptions.McpError: tools/list failed for 1 tool source(s), succeede
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1`. Configured downstream target: `https://srchabcc7puse24s5tluc.search.windows.net/knowledgebases/kb-c/mcp?api-version=2026-05-01-preview` (configuration is not execution evidence).
 
-Caller-context SHA-256: `EnkKDKNgqpdnLUY1cgG1WxtN+3fU4Cc2IHmbP0tzsh8=`.
+Caller-context SHA-256: `tn7gPnZWYb419FaVa9pB65nplSWvNnjYCwExRSDn/Jg=`.
 
 Exact captured request (only sensitive baggage redacted):
 
@@ -3493,14 +4224,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "error": {
-    "code": -32007,
-    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\r\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\r\\nStatus Code: 400 BadRequest\\r\\nError Code: ValidationError\\r\\nReason Phrase: Bad Request\\r\\nResponse Body: {\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"ValidationError\\\",\\n    \\\"severity\\\": null,\\n    \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\",\\n    \\\"messageFormat\\\": null,\\n    \\\"messageParameters\\\": null,\\n    \\\"referenceCode\\\": null,\\n    \\\"detailsUri\\\": null,\\n    \\\"target\\\": \\\"UserToken\\\",\\n    \\\"details\\\": [\\n      {\\n        \\\"code\\\": \\\"Invalid\\\",\\n        \\\"severity\\\": null,\\n        \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\",\\n        \\\"messageFormat\\\": null,\\n        \\\"messageParameters\\\": {},\\n        \\\"referenceCode\\\": null,\\n        \\\"detailsUri\\\": null,\\n        \\\"target\\\": \\\"UserToken\\\",\\n        \\\"details\\\": [],\\n        \\\"innerError\\\": null,\\n        \\\"debugInfo\\\": null,\\n        \\\"additionalInfo\\\": null\\n      }\\n    ],\\n    \\\"innerError\\\": null,\\n    \\\"debugInfo\\\": null,\\n    \\\"additionalInfo\\\": null\\n  },\\n  \\\"correlation\\\": {\\n    \\\"operation\\\": \\\"7e01a9229eabc0436791651dbf0a0f0d\\\",\\n    \\\"request\\\": \\\"abeb5319c4529f23\\\"\\n  },\\n  \\\"environment\\\": \\\"eastus2\\\",\\n  \\\"location\\\": \\\"eastus2\\\",\\n  \\\"time\\\": \\\"2026-11-01T11:35:15.8434545+00:00\\\",\\n  \\\"componentName\\\": \\\"obotoken\\\",\\n  \\\"statusCode\\\": 400\\n}\"}}]}"
-  }
-}
+{"jsonrpc":"2.0","id":2,"error":{"code":-32007,"message":"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\r\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\r\\nStatus Code: 400 BadRequest\\r\\nError Code: ValidationError\\r\\nReason Phrase: Bad Request\\r\\nResponse Body: {\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"ValidationError\\\",\\n    \\\"severity\\\": null,\\n    \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\",\\n    \\\"messageFormat\\\": null,\\n    \\\"messageParameters\\\": null,\\n    \\\"referenceCode\\\": null,\\n    \\\"detailsUri\\\": null,\\n    \\\"target\\\": \\\"UserToken\\\",\\n    \\\"details\\\": [\\n      {\\n        \\\"code\\\": \\\"Invalid\\\",\\n        \\\"severity\\\": null,\\n        \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\",\\n        \\\"messageFormat\\\": null,\\n        \\\"messageParameters\\\": {},\\n        \\\"referenceCode\\\": null,\\n        \\\"detailsUri\\\": null,\\n        \\\"target\\\": \\\"UserToken\\\",\\n        \\\"details\\\": [],\\n        \\\"innerError\\\": null,\\n        \\\"debugInfo\\\": null,\\n        \\\"additionalInfo\\\": null\\n      }\\n    ],\\n    \\\"innerError\\\": null,\\n    \\\"debugInfo\\\": null,\\n    \\\"additionalInfo\\\": null\\n  },\\n  \\\"correlation\\\": {\\n    \\\"operation\\\": \\\"d5b56ddb7a588ae69efa91fa59f75472\\\",\\n    \\\"request\\\": \\\"0daec734253b9ae5\\\"\\n  },\\n  \\\"environment\\\": \\\"eastus2\\\",\\n  \\\"location\\\": \\\"eastus2\\\",\\n  \\\"time\\\": \\\"2026-11-01T12:27:24.8327013+00:00\\\",\\n  \\\"componentName\\\": \\\"obotoken\\\",\\n  \\\"statusCode\\\": 400\\n}\"}}]}"}}
 ```
 
 
@@ -3510,47 +4234,139 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "fc265650-6426-48c3-a1a4-dd7fc5f16a47",
+    "apimRequestId": "677a0b63-cf4f-4d6d-8937-0dfdb0bc5dfe",
     "callerContextPresent": "True",
-    "callerContextHash": "EnkKDKNgqpdnLUY1cgG1WxtN+3fU4Cc2IHmbP0tzsh8=",
+    "callerContextHash": "tn7gPnZWYb419FaVa9pB65nplSWvNnjYCwExRSDn/Jg=",
     "observedPlatformPrincipalId": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
-    "requestTimestamp": "2026-11-01T11:35:14.4419253Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "appid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539640",
+        "iat": "1793535740"
+      },
+      "tokenSha256": "b47eb9071811cdd8a9834a30a38d950ecc9728860b221283718838ea58b5b9e3",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:21.8348223Z",
     "requestBody": "{\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"sampling\":{}},\"clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"}},\"jsonrpc\":\"2.0\",\"id\":0}",
-    "responseTimestamp": "2026-11-01T11:35:14.8467863Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 0,\n  \"result\": {\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}\n}",
+    "responseTimestamp": "2026-11-01T12:27:22.0285627Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"tools\":{},\"tasks\":{\"list\":{},\"cancel\":{},\"requests\":{\"tools\":{\"call\":{}}}},\"resources\":{\"listChanged\":false,\"subscribe\":false},\"extensions\":{\"io.modelcontextprotocol/skills\":{}}},\"serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "e03b483e-7d82-4ab6-82b8-4e02d5adddd5",
+    "apimRequestId": "38912a3e-3b8c-4a3f-80c2-7f4069c59a7b",
     "callerContextPresent": "True",
-    "callerContextHash": "EnkKDKNgqpdnLUY1cgG1WxtN+3fU4Cc2IHmbP0tzsh8=",
+    "callerContextHash": "tn7gPnZWYb419FaVa9pB65nplSWvNnjYCwExRSDn/Jg=",
     "observedPlatformPrincipalId": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
-    "requestTimestamp": "2026-11-01T11:35:14.9462727Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "appid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539640",
+        "iat": "1793535740"
+      },
+      "tokenSha256": "b47eb9071811cdd8a9834a30a38d950ecc9728860b221283718838ea58b5b9e3",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:23.9074328Z",
     "requestBody": "{\"method\":\"notifications/initialized\",\"jsonrpc\":\"2.0\"}",
-    "responseTimestamp": "2026-11-01T11:35:14.9751122Z",
+    "responseTimestamp": "2026-11-01T12:27:23.9730027Z",
     "responseBody": "<empty-body>",
     "backendStatus": 204
   },
   {
-    "apimRequestId": "6adb9002-4d0a-45a9-bb20-de6d9f11e791",
+    "apimRequestId": "c069d0f8-faf8-4e40-baa1-1b69642b5f75",
     "callerContextPresent": "True",
-    "callerContextHash": "EnkKDKNgqpdnLUY1cgG1WxtN+3fU4Cc2IHmbP0tzsh8=",
+    "callerContextHash": "tn7gPnZWYb419FaVa9pB65nplSWvNnjYCwExRSDn/Jg=",
     "observedPlatformPrincipalId": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
-    "requestTimestamp": "2026-11-01T11:35:15.0175271Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "appid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539640",
+        "iat": "1793535740"
+      },
+      "tokenSha256": "b47eb9071811cdd8a9834a30a38d950ecc9728860b221283718838ea58b5b9e3",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:24.0252802Z",
     "requestBody": "{\"method\":\"ping\",\"jsonrpc\":\"2.0\",\"id\":1}",
-    "responseTimestamp": "2026-11-01T11:35:15.0517585Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {}\n}",
+    "responseTimestamp": "2026-11-01T12:27:24.0601535Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "468be3c0-cf32-4db7-97e2-71798f6d5eb1",
+    "apimRequestId": "245344ed-e243-488f-a0bf-8834466df825",
     "callerContextPresent": "True",
-    "callerContextHash": "EnkKDKNgqpdnLUY1cgG1WxtN+3fU4Cc2IHmbP0tzsh8=",
+    "callerContextHash": "tn7gPnZWYb419FaVa9pB65nplSWvNnjYCwExRSDn/Jg=",
     "observedPlatformPrincipalId": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
-    "requestTimestamp": "2026-11-01T11:35:15.0648224Z",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "appid": "8c2d2573-9c63-42cd-86c0-ce807db9edcf",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539640",
+        "iat": "1793535740"
+      },
+      "tokenSha256": "b47eb9071811cdd8a9834a30a38d950ecc9728860b221283718838ea58b5b9e3",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:24.0730473Z",
     "requestBody": "{\"method\":\"tools/list\",\"jsonrpc\":\"2.0\",\"id\":2}",
-    "responseTimestamp": "2026-11-01T11:35:15.8619238Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"error\": {\n    \"code\": -32007,\n    \"message\": \"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\\\"error\\\\\\\": {\\\\n    \\\\\\\"code\\\\\\\": \\\\\\\"ValidationError\\\\\\\",\\\\n    \\\\\\\"severity\\\\\\\": null,\\\\n    \\\\\\\"message\\\\\\\": \\\\\\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\\\",\\\\n    \\\\\\\"messageFormat\\\\\\\": null,\\\\n    \\\\\\\"messageParameters\\\\\\\": null,\\\\n    \\\\\\\"referenceCode\\\\\\\": null,\\\\n    \\\\\\\"detailsUri\\\\\\\": null,\\\\n    \\\\\\\"target\\\\\\\": \\\\\\\"UserToken\\\\\\\",\\\\n    \\\\\\\"details\\\\\\\": [\\\\n      {\\\\n        \\\\\\\"code\\\\\\\": \\\\\\\"Invalid\\\\\\\",\\\\n        \\\\\\\"severity\\\\\\\": null,\\\\n        \\\\\\\"message\\\\\\\": \\\\\\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\\\",\\\\n        \\\\\\\"messageFormat\\\\\\\": null,\\\\n        \\\\\\\"messageParameters\\\\\\\": {},\\\\n        \\\\\\\"referenceCode\\\\\\\": null,\\\\n        \\\\\\\"detailsUri\\\\\\\": null,\\\\n        \\\\\\\"target\\\\\\\": \\\\\\\"UserToken\\\\\\\",\\\\n        \\\\\\\"details\\\\\\\": [],\\\\n        \\\\\\\"innerError\\\\\\\": null,\\\\n        \\\\\\\"debugInfo\\\\\\\": null,\\\\n        \\\\\\\"additionalInfo\\\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\\\"innerError\\\\\\\": null,\\\\n    \\\\\\\"debugInfo\\\\\\\": null,\\\\n    \\\\\\\"additionalInfo\\\\\\\": null\\\\n  },\\\\n  \\\\\\\"correlation\\\\\\\": {\\\\n    \\\\\\\"operation\\\\\\\": \\\\\\\"7e01a9229eabc0436791651dbf0a0f0d\\\\\\\",\\\\n    \\\\\\\"request\\\\\\\": \\\\\\\"abeb5319c4529f23\\\\\\\"\\\\n  },\\\\n  \\\\\\\"environment\\\\\\\": \\\\\\\"eastus2\\\\\\\",\\\\n  \\\\\\\"location\\\\\\\": \\\\\\\"eastus2\\\\\\\",\\\\n  \\\\\\\"time\\\\\\\": \\\\\\\"2026-11-01T11:35:15.8434545+00:00\\\\\\\",\\\\n  \\\\\\\"componentName\\\\\\\": \\\\\\\"obotoken\\\\\\\",\\\\n  \\\\\\\"statusCode\\\\\\\": 400\\\\n}\\\"}}]}\"\n  }\n}",
+    "responseTimestamp": "2026-11-01T12:27:24.8556212Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32007,\"message\":\"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"HTTP_400\\\",\\\"message\\\":\\\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\\\"error\\\\\\\": {\\\\n    \\\\\\\"code\\\\\\\": \\\\\\\"ValidationError\\\\\\\",\\\\n    \\\\\\\"severity\\\\\\\": null,\\\\n    \\\\\\\"message\\\\\\\": \\\\\\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\\\",\\\\n    \\\\\\\"messageFormat\\\\\\\": null,\\\\n    \\\\\\\"messageParameters\\\\\\\": null,\\\\n    \\\\\\\"referenceCode\\\\\\\": null,\\\\n    \\\\\\\"detailsUri\\\\\\\": null,\\\\n    \\\\\\\"target\\\\\\\": \\\\\\\"UserToken\\\\\\\",\\\\n    \\\\\\\"details\\\\\\\": [\\\\n      {\\\\n        \\\\\\\"code\\\\\\\": \\\\\\\"Invalid\\\\\\\",\\\\n        \\\\\\\"severity\\\\\\\": null,\\\\n        \\\\\\\"message\\\\\\\": \\\\\\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\\\",\\\\n        \\\\\\\"messageFormat\\\\\\\": null,\\\\n        \\\\\\\"messageParameters\\\\\\\": {},\\\\n        \\\\\\\"referenceCode\\\\\\\": null,\\\\n        \\\\\\\"detailsUri\\\\\\\": null,\\\\n        \\\\\\\"target\\\\\\\": \\\\\\\"UserToken\\\\\\\",\\\\n        \\\\\\\"details\\\\\\\": [],\\\\n        \\\\\\\"innerError\\\\\\\": null,\\\\n        \\\\\\\"debugInfo\\\\\\\": null,\\\\n        \\\\\\\"additionalInfo\\\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\\\"innerError\\\\\\\": null,\\\\n    \\\\\\\"debugInfo\\\\\\\": null,\\\\n    \\\\\\\"additionalInfo\\\\\\\": null\\\\n  },\\\\n  \\\\\\\"correlation\\\\\\\": {\\\\n    \\\\\\\"operation\\\\\\\": \\\\\\\"d5b56ddb7a588ae69efa91fa59f75472\\\\\\\",\\\\n    \\\\\\\"request\\\\\\\": \\\\\\\"0daec734253b9ae5\\\\\\\"\\\\n  },\\\\n  \\\\\\\"environment\\\\\\\": \\\\\\\"eastus2\\\\\\\",\\\\n  \\\\\\\"location\\\\\\\": \\\\\\\"eastus2\\\\\\\",\\\\n  \\\\\\\"time\\\\\\\": \\\\\\\"2026-11-01T12:27:24.8327013+00:00\\\\\\\",\\\\n  \\\\\\\"componentName\\\\\\\": \\\\\\\"obotoken\\\\\\\",\\\\n  \\\\\\\"statusCode\\\\\\\": 400\\\\n}\\\"}}]}\"}}",
     "backendStatus": 200
   }
 ]
@@ -3562,17 +4378,17 @@ Actual hosted response (sensitive consent/session identifiers redacted):
 
 ```json
 {
-  "id": "caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65",
+  "id": "caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO",
   "object": "response",
   "output": [],
-  "created_at": 1793532913,
+  "created_at": 1793536039,
   "error": {
     "code": "server_error",
-    "message": "('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"7e01a9229eabc0436791651dbf0a0f0d\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"abeb5319c4529f23\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T11:35:15.8434545+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
+    "message": "('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"d5b56ddb7a588ae69efa91fa59f75472\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"0daec734253b9ae5\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T12:27:24.8327013+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
   },
   "parallel_tool_calls": false,
   "status": "failed",
-  "response_id": "caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65",
+  "response_id": "caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-c-native",
@@ -3593,650 +4409,650 @@ Runtime query result:
   "scenario": "c-native",
   "agent": "obs-20261031-c-native",
   "version": "2",
-  "experimentId": "7f4f5874-6c7f-4187-8a6e-ab38ca0464f1",
-  "responseId": "caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65",
-  "invocationStartedAt": "2026-11-01T11:34:57.231496+00:00",
-  "invocationCompletedAt": "2026-11-01T11:35:14.968297+00:00",
-  "queriedAt": "2026-11-01T11:45:59.582499+00:00",
+  "experimentId": "d791f5ca-24a5-4d8f-ab04-dffc0f08c50e",
+  "responseId": "caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO",
+  "invocationStartedAt": "2026-11-01T12:27:15.187455+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:23.902184+00:00",
+  "queriedAt": "2026-11-01T12:33:00.437513+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:57.411761706+00:00",
+      "timestamp": "2026-11-01T12:27:15.213594764+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:57.416469834+00:00",
+      "timestamp": "2026-11-01T12:27:15.218545878+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:57.825062009+00:00",
+      "timestamp": "2026-11-01T12:27:15.599161309+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:57,824 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:15,599 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:57.984955127+00:00",
+      "timestamp": "2026-11-01T12:27:15.731809266+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:57,984 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:15,731 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,016 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:15,763 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.017307071+00:00",
+      "timestamp": "2026-11-01T12:27:15.764088758+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.020140999+00:00",
+      "timestamp": "2026-11-01T12:27:15.766767078+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,020 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:15,766 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.020286946+00:00",
+      "timestamp": "2026-11-01T12:27:15.766915937+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,020 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:15,766 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.020691418+00:00",
+      "timestamp": "2026-11-01T12:27:15.767322643+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,020 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:15,767 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.020781693+00:00",
+      "timestamp": "2026-11-01T12:27:15.767414212+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,020 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:15,767 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.089066951+00:00",
+      "timestamp": "2026-11-01T12:27:15.832743986+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,089 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:15,832 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.089929427+00:00",
+      "timestamp": "2026-11-01T12:27:15.833652530+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,089 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:15,833 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.090242651+00:00",
+      "timestamp": "2026-11-01T12:27:15.833905019+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,090 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:15,833 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.090315376+00:00",
+      "timestamp": "2026-11-01T12:27:15.833976200+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,090 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:15,833 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.091401267+00:00",
+      "timestamp": "2026-11-01T12:27:15.835047749+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,090 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:15,834 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.091816800+00:00",
+      "timestamp": "2026-11-01T12:27:15.835495020+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:34:58 +0000] [47] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:15 +0000] [44] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.091837648+00:00",
+      "timestamp": "2026-11-01T12:27:15.835517382+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,091 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:15,835 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.109658762+00:00",
+      "timestamp": "2026-11-01T12:27:16.122726418+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,109 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: cfcc03aad8ffcedeff71cca300441b36)"
+      "line": "2026-11-01 12:27:16,122 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 9c784db0d93fee07b67ce490018c2f1f)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.110546426+00:00",
+      "timestamp": "2026-11-01T12:27:16.123477236+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,110 INFO azure.ai.agentserver: 192.168.0.1:56518 \"GET /readiness 1.1\" 200 20 943\u03bcs"
+      "line": "2026-11-01 12:27:16,123 INFO azure.ai.agentserver: 192.168.0.1:56432 \"GET /readiness 1.1\" 200 20 969\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:34:58.110729847+00:00",
+      "timestamp": "2026-11-01T12:27:16.123653738+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:34:58,110 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.9ms (trace-id: cfcc03aad8ffcedeff71cca300441b36)"
+      "line": "2026-11-01 12:27:16,123 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.7ms (trace-id: 9c784db0d93fee07b67ce490018c2f1f)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:13.142523318+00:00",
+      "timestamp": "2026-11-01T12:27:19.710814063+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:13,142 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 0c1f38c13923d932fb5a7e2cce8c1be1, x-ms-client-request-id: bb4705bd-51de-4380-a698-ab390b949719, trace-id: 0c1f38c13923d932fb5a7e2cce8c1be1)"
+      "line": "2026-11-01 12:27:19,710 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 009447de86428bf922ca8a7a61ac1eb6, x-ms-client-request-id: b8718776-29bb-4fbe-80f4-08217b53fbc0, trace-id: 009447de86428bf922ca8a7a61ac1eb6)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:13.144834013+00:00",
+      "timestamp": "2026-11-01T12:27:19.713094941+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:13,144 INFO azure.ai.agentserver: Creating response caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:19,712 INFO azure.ai.agentserver: Creating response caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO: streaming=False background=False store=False model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:13.145508715+00:00",
+      "timestamp": "2026-11-01T12:27:19.713874225+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:13,145 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65"
+      "line": "2026-11-01 12:27:19,713 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.073075447+00:00",
+      "timestamp": "2026-11-01T12:27:20.154008497+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,072 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:20,153 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.823259992+00:00",
+      "timestamp": "2026-11-01T12:27:22.003781659+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,823 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:22,003 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.824523680+00:00",
+      "timestamp": "2026-11-01T12:27:22.005534357+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,824 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
+      "line": "2026-11-01 12:27:22,005 INFO mcp.client.streamable_http: Negotiated protocol version: 2025-11-25"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.827620327+00:00",
+      "timestamp": "2026-11-01T12:27:22.008711481+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,827 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,008 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.828364812+00:00",
+      "timestamp": "2026-11-01T12:27:22.009512370+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,827 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:22,008 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.828495663+00:00",
+      "timestamp": "2026-11-01T12:27:22.009667247+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,828 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:22,009 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.950398958+00:00",
+      "timestamp": "2026-11-01T12:27:23.950965322+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,950 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 204 No Content\""
+      "line": "2026-11-01 12:27:23,950 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 204 No Content\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.951419648+00:00",
+      "timestamp": "2026-11-01T12:27:23.954704839+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,951 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:23,954 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.951572295+00:00",
+      "timestamp": "2026-11-01T12:27:23.954941719+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,951 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:23,954 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:14.951663015+00:00",
+      "timestamp": "2026-11-01T12:27:23.955050863+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:14,951 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:23,955 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.026310773+00:00",
+      "timestamp": "2026-11-01T12:27:24.034558101+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,026 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:24,034 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.029330091+00:00",
+      "timestamp": "2026-11-01T12:27:24.040031029+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,029 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:24,039 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.029481559+00:00",
+      "timestamp": "2026-11-01T12:27:24.040205548+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,029 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:24,040 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.029602076+00:00",
+      "timestamp": "2026-11-01T12:27:24.040625910+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,029 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:24,040 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.837484710+00:00",
+      "timestamp": "2026-11-01T12:27:24.830759850+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,837 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:24,830 INFO httpx: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-native/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,841 ERROR agent_framework_foundry_hosting._responses: Failed to prepare agent: ('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"7e01a9229eabc0436791651dbf0a0f0d\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"abeb5319c4529f23\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T11:35:15.8434545+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
+      "line": "2026-11-01 12:27:24,835 ERROR agent_framework_foundry_hosting._responses: Failed to prepare agent: ('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"d5b56ddb7a588ae69efa91fa59f75472\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"0daec734253b9ae5\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T12:27:24.8327013+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 3488, in __aenter__"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self.connect()"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework_foundry_hosting/_toolbox.py\", line 267, in connect"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await super().connect(reset=reset)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 1932, in connect"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self._run_on_lifecycle_owner(\"connect\", reset=reset)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 1828, in _run_on_lifecycle_owner"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await future"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 1728, in _run_lifecycle_owner"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self._connect_on_owner("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    ...<3 lines>..."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 2071, in _connect_on_owner"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self.load_tools()"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 2536, in load_tools"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self._load_tools_locked()"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 2574, in _load_tools_locked"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    tool_list = await self.session.list_tools(params=params)  # type: ignore[union-attr]"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/mcp/client/session.py\", line 529, in list_tools"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    result = await self.send_request("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "             ^^^^^^^^^^^^^^^^^^^^^^^^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    ...<2 lines>..."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    ^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/mcp/shared/session.py\", line 306, in send_request"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    raise McpError(response_or_error.error)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
-      "line": "mcp.shared.exceptions.McpError: tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\r\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\r\\nStatus Code: 400 BadRequest\\r\\nError Code: ValidationError\\r\\nReason Phrase: Bad Request\\r\\nResponse Body: {\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"ValidationError\\\",\\n    \\\"severity\\\": null,\\n    \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\",\\n    \\\"messageFormat\\\": null,\\n    \\\"messageParameters\\\": null,\\n    \\\"referenceCode\\\": null,\\n    \\\"detailsUri\\\": null,\\n    \\\"target\\\": \\\"UserToken\\\",\\n    \\\"details\\\": [\\n      {\\n        \\\"code\\\": \\\"Invalid\\\",\\n        \\\"severity\\\": null,\\n        \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\",\\n        \\\"messageFormat\\\": null,\\n        \\\"messageParameters\\\": {},\\n        \\\"referenceCode\\\": null,\\n        \\\"detailsUri\\\": null,\\n        \\\"target\\\": \\\"UserToken\\\",\\n        \\\"details\\\": [],\\n        \\\"innerError\\\": null,\\n        \\\"debugInfo\\\": null,\\n        \\\"additionalInfo\\\": null\\n      }\\n    ],\\n    \\\"innerError\\\": null,\\n    \\\"debugInfo\\\": null,\\n    \\\"additionalInfo\\\": null\\n  },\\n  \\\"correlation\\\": {\\n    \\\"operation\\\": \\\"7e01a9229eabc0436791651dbf0a0f0d\\\",\\n    \\\"request\\\": \\\"abeb5319c4529f23\\\"\\n  },\\n  \\\"environment\\\": \\\"eastus2\\\",\\n  \\\"location\\\": \\\"eastus2\\\",\\n  \\\"time\\\": \\\"2026-11-01T11:35:15.8434545+00:00\\\",\\n  \\\"componentName\\\": \\\"obotoken\\\",\\n  \\\"statusCode\\\": 400\\n}\"}}]}"
+      "line": "mcp.shared.exceptions.McpError: tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for '/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\r\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\r\\nStatus Code: 400 BadRequest\\r\\nError Code: ValidationError\\r\\nReason Phrase: Bad Request\\r\\nResponse Body: {\\n  \\\"error\\\": {\\n    \\\"code\\\": \\\"ValidationError\\\",\\n    \\\"severity\\\": null,\\n    \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\",\\n    \\\"messageFormat\\\": null,\\n    \\\"messageParameters\\\": null,\\n    \\\"referenceCode\\\": null,\\n    \\\"detailsUri\\\": null,\\n    \\\"target\\\": \\\"UserToken\\\",\\n    \\\"details\\\": [\\n      {\\n        \\\"code\\\": \\\"Invalid\\\",\\n        \\\"severity\\\": null,\\n        \\\"message\\\": \\\"AADSTS500016: Application '880da380-985e-4198-81b9-e05b1cc53158' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\",\\n        \\\"messageFormat\\\": null,\\n        \\\"messageParameters\\\": {},\\n        \\\"referenceCode\\\": null,\\n        \\\"detailsUri\\\": null,\\n        \\\"target\\\": \\\"UserToken\\\",\\n        \\\"details\\\": [],\\n        \\\"innerError\\\": null,\\n        \\\"debugInfo\\\": null,\\n        \\\"additionalInfo\\\": null\\n      }\\n    ],\\n    \\\"innerError\\\": null,\\n    \\\"debugInfo\\\": null,\\n    \\\"additionalInfo\\\": null\\n  },\\n  \\\"correlation\\\": {\\n    \\\"operation\\\": \\\"d5b56ddb7a588ae69efa91fa59f75472\\\",\\n    \\\"request\\\": \\\"0daec734253b9ae5\\\"\\n  },\\n  \\\"environment\\\": \\\"eastus2\\\",\\n  \\\"location\\\": \\\"eastus2\\\",\\n  \\\"time\\\": \\\"2026-11-01T12:27:24.8327013+00:00\\\",\\n  \\\"componentName\\\": \\\"obotoken\\\",\\n  \\\"statusCode\\\": 400\\n}\"}}]}"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": ""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "The above exception was the direct cause of the following exception:"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": ""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework_foundry_hosting/_responses.py\", line 1044, in _handle_prepared_response"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self._ensure_agent_ready()"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework_foundry_hosting/_responses.py\", line 940, in _ensure_agent_ready"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await stack.enter_async_context(cast(AbstractAsyncContextManager[Any], agent))"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/opt/python/3.13.17/lib/python3.13/contextlib.py\", line 668, in enter_async_context"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    result = await _enter(cm)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "             ^^^^^^^^^^^^^^^^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_agents.py\", line 1085, in __aenter__"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    return await self.open()"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "           ^^^^^^^^^^^^^^^^^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_agents.py\", line 1077, in open"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    await self._async_exit_stack.enter_async_context(context_manager)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/opt/python/3.13.17/lib/python3.13/contextlib.py\", line 668, in enter_async_context"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    result = await _enter(cm)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "             ^^^^^^^^^^^^^^^^"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/agent_framework/_mcp.py\", line 3494, in __aenter__"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "    raise ToolExecutionException(\"Failed to enter context manager.\", inner_exception=ex) from ex"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845855489+00:00",
+      "timestamp": "2026-11-01T12:27:24.839939773+00:00",
       "stream": "stderr",
       "line": "agent_framework.exceptions.ToolExecutionException: ('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution faile"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.845891153+00:00",
+      "timestamp": "2026-11-01T12:27:24.839998921+00:00",
       "stream": "stderr",
-      "line": "d for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 79eeba9b-1eb1-4679-8360-17d170b1a900 Correlation ID: d69d68e1-9795-463b-bbb9-ebd741c7b8cb Timestamp: 2026-11-01 11:35:15Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"7e01a9229eabc0436791651dbf0a0f0d\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"abeb5319c4529f23\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T11:35:15.8434545+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
+      "line": "d for \\'/subscriptions/292e62e6-54a8-4c6a-b996-0c83f8cc29d0/resourceGroups/rg-foundry-iq-toolbox-rbac/providers/Microsoft.CognitiveServices/accounts/fdy-iq-rbac-tbkj2wgzdhqi6/projects/abc-c/connections/iq-c-primary\\'. HTTP status: BadRequest. Reason: Bad request: Service invocation failed!\\\\r\\\\nRequest: POST obotoken.vienna-eastus2.svc/obotoken/v1.0/getuseraccesstoken\\\\r\\\\nStatus Code: 400 BadRequest\\\\r\\\\nError Code: ValidationError\\\\r\\\\nReason Phrase: Bad Request\\\\r\\\\nResponse Body: {\\\\n  \\\\\"error\\\\\": {\\\\n    \\\\\"code\\\\\": \\\\\"ValidationError\\\\\",\\\\n    \\\\\"severity\\\\\": null,\\\\n    \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n    \\\\\"messageFormat\\\\\": null,\\\\n    \\\\\"messageParameters\\\\\": null,\\\\n    \\\\\"referenceCode\\\\\": null,\\\\n    \\\\\"detailsUri\\\\\": null,\\\\n    \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n    \\\\\"details\\\\\": [\\\\n      {\\\\n        \\\\\"code\\\\\": \\\\\"Invalid\\\\\",\\\\n        \\\\\"severity\\\\\": null,\\\\n        \\\\\"message\\\\\": \\\\\"AADSTS500016: Application \\'880da380-985e-4198-81b9-e05b1cc53158\\' is not supported as a resource application to execute the flow. Trace ID: 8669c0db-f8b7-4e27-bd6a-8d5f566e4100 Correlation ID: dbb6ca3b-2acd-4194-9940-c7bc3fe6b365 Timestamp: 2026-11-01 12:27:24Z\\\\\",\\\\n        \\\\\"messageFormat\\\\\": null,\\\\n        \\\\\"messageParameters\\\\\": {},\\\\n        \\\\\"referenceCode\\\\\": null,\\\\n        \\\\\"detailsUri\\\\\": null,\\\\n        \\\\\"target\\\\\": \\\\\"UserToken\\\\\",\\\\n        \\\\\"details\\\\\": [],\\\\n        \\\\\"innerError\\\\\": null,\\\\n        \\\\\"debugInfo\\\\\": null,\\\\n        \\\\\"additionalInfo\\\\\": null\\\\n      }\\\\n    ],\\\\n    \\\\\"innerError\\\\\": null,\\\\n    \\\\\"debugInfo\\\\\": null,\\\\n    \\\\\"additionalInfo\\\\\": null\\\\n  },\\\\n  \\\\\"correlation\\\\\": {\\\\n    \\\\\"operation\\\\\": \\\\\"d5b56ddb7a588ae69efa91fa59f75472\\\\\",\\\\n    \\\\\"request\\\\\": \\\\\"0daec734253b9ae5\\\\\"\\\\n  },\\\\n  \\\\\"environment\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"location\\\\\": \\\\\"eastus2\\\\\",\\\\n  \\\\\"time\\\\\": \\\\\"2026-11-01T12:27:24.8327013+00:00\\\\\",\\\\n  \\\\\"componentName\\\\\": \\\\\"obotoken\\\\\",\\\\n  \\\\\"statusCode\\\\\": 400\\\\n}\"}}]}'))"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.847793411+00:00",
+      "timestamp": "2026-11-01T12:27:24.841849981+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,847 INFO azure.ai.agentserver: Response caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65 completed: status=failed output_count=0"
+      "line": "2026-11-01 12:27:24,841 INFO azure.ai.agentserver: Response caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO completed: status=failed output_count=0"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.848074969+00:00",
+      "timestamp": "2026-11-01T12:27:24.842193544+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,848 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:24,842 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.848737185+00:00",
+      "timestamp": "2026-11-01T12:27:24.842953281+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,848 INFO azure.ai.agentserver: 192.168.0.1:48580 \"POST /responses 1.1\" 200 3322 2707522\u03bcs"
+      "line": "2026-11-01 12:27:24,842 INFO azure.ai.agentserver: 192.168.0.1:56432 \"POST /responses 1.1\" 200 3322 5133669\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.848947296+00:00",
+      "timestamp": "2026-11-01T12:27:24.843186013+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,848 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 2705.5ms (x-request-id: 0c1f38c13923d932fb5a7e2cce8c1be1, x-ms-client-request-id: bb4705bd-51de-4380-a698-ab390b949719, trace-id: 0c1f38c13923d932fb5a7e2cce8c1be1)"
+      "line": "2026-11-01 12:27:24,843 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 5131.7ms (x-request-id: 009447de86428bf922ca8a7a61ac1eb6, x-ms-client-request-id: b8718776-29bb-4fbe-80f4-08217b53fbc0, trace-id: 009447de86428bf922ca8a7a61ac1eb6)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:15.849087174+00:00",
+      "timestamp": "2026-11-01T12:27:24.843330936+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:15,849 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:24,843 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:35:18.934346756+00:00",
+      "timestamp": "2026-11-01T12:27:28.230387878+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:35:18,934 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
+      "line": "2026-11-01 12:27:28,230 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -4259,7 +5075,7 @@ Local full sources: `evidence\observability-c-native.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-c-native.json#agentResponse",
-  "responseId": "caresp_02e1e1d0d642c50b00rZWFgz9lPAZJNYd2lP5IMbK6xRFNXw65",
+  "responseId": "caresp_09fb492d77c9a61400uJWRzB0ssb1PhkfIPDSicJqSVHhIloMO",
   "status": "failed",
   "error": {
     "code": "server_error",
@@ -4561,7 +5377,82 @@ Fresh Azure hosted-agent executions on **November 1, 2026**, on the existing pin
 
 ### Live replay — c-custom: BLOCKED_OAUTH_CONSENT_REQUIRED
 
-Agent `obs-20261031-c-custom` v2; Toolbox v3. UTC `2026-11-01T11:36:16.844683+00:00` → `2026-11-01T11:36:31.171699+00:00`. Experiment `dc8101ed-8983-41e9-a944-1fb7a69b91ed`.
+Agent `obs-20261031-c-custom` v2; Toolbox v3. UTC `2026-11-01T12:27:42.424710+00:00` → `2026-11-01T12:27:49.582437+00:00`. Experiment `9826a721-f60a-4e1e-b13d-51c3ed0dcd73`.
+
+**Identity-hop lesson (observations versus configuration)**
+
+Control-plane source: `Azure agent control-plane identity and configured project`; observed UTC `2026-11-01T12:30:33.407081+00:00`. Configured agent instance principal `114281a8-d2fe-407c-a1cf-28461136d9af`; project managed identity `1a04abde-08e9-4949-b975-b2520119ca1d`. Configuration alone is not token evidence.
+
+| Hop | Observed principal (`oid`) | Audience | Evidence / interpretation |
+
+|---|---|---|---|
+
+| User → agent | `c6982fed-3a65-46cb-a80f-d5093b79e3e4` | `https://ai.azure.com` | Caller credential decoded only; **not locally validated**. Hosted HTTP acceptance does not upgrade this capture to JWT validation evidence. |
+
+| Agent → APIM → Toolbox | `114281a8-d2fe-407c-a1cf-28461136d9af` | `https://ai.azure.com` | Entra token **validated at APIM**; same inbound bearer forwarded unchanged to Toolbox. APIM performs no token exchange. |
+
+| Toolbox → MCP | **NOT_OBSERVED** token | **NOT_OBSERVED** token audience | Configured: OAuth2 authorization code + refresh; delegated custom API scope. No downstream JWT capture; do not substitute configured claims. |
+
+Selected caller JWT header/claims (decoded-only):
+
+
+```json
+{
+  "boundary": "selected Azure CLI credential -> hosted agent endpoint",
+  "validation": "DECODED_ONLY_NOT_VALIDATED",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": "https://ai.azure.com",
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "c6982fed-3a65-46cb-a80f-d5093b79e3e4",
+    "appid": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+    "scp": "user_impersonation",
+    "idtyp": "user",
+    "ver": "1.0",
+    "exp": 1793540362,
+    "iat": 1793535765
+  }
+}
+```
+
+
+Selected platform JWT header/claims (APIM-validated):
+
+
+```json
+{
+  "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+  "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+  "header": {
+    "alg": "RS256",
+    "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+  },
+  "claims": {
+    "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+    "aud": [
+      "https://ai.azure.com"
+    ],
+    "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+    "oid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+    "appid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+    "idtyp": "app",
+    "ver": "1.0",
+    "exp": "1793539667",
+    "iat": "1793535767"
+  }
+}
+```
+
+
+Only `alg`, `kid` and the displayed allowlisted claims are included; no raw JWT, signature, key material or opaque JWT metadata. Missing `scp`, `roles` or `idtyp` means absent from this observation, not an authorization failure. RBAC/application authorization need not appear as a `roles` claim.
+
+**Conclusion:** APIM's inbound platform `oid` is this **calling agent instance**, including track A; it is neither the initiating human nor A's project managed identity.
+
+Current upstream replay is **pending consent**, not OAuth success. The configured delegated scope is not an observed token `scp`. The earlier **direct C custom OAuth success** used authorization-code consent plus refresh on a different invocation/route, without this upstream APIM hop; it must not be relabelled as this run or as literal JWT-bearer OBO.
 
 **1. User input → actual hosted response**
 
@@ -4569,11 +5460,11 @@ Exact submitted user prompt (not the generated MCP arguments):
 
 
 ```text
-Call probe_echo exactly once with arguments {"experiment_id": "dc8101ed-8983-41e9-a944-1fb7a69b91ed", "message": "oauth-toolbox", "count": 2}. Return its exact result.
+Call probe_echo exactly once with arguments {"experiment_id": "9826a721-f60a-4e1e-b13d-51c3ed0dcd73", "message": "oauth-toolbox", "count": 2}. Return its exact result.
 ```
 
 
-Hosted HTTP **200**; response `caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb`; status **incomplete**.
+Hosted HTTP **200**; response `caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9`; status **incomplete**.
 
 No hosted answer/tool output; returned event types:
 
@@ -4587,9 +5478,9 @@ No hosted answer/tool output; returned event types:
 
 **2. APIM → Toolbox: observed MCP request/response**
 
-`tools/list`; request `092f46e9-297e-4f5b-b29f-917f8f00b674`; backend HTTP **200**.
+`tools/list`; request `99d8874d-2998-41df-81a0-d2889599363c`; backend HTTP **200**.
 
-UTC request `2026-11-01T11:36:29.8106109Z`; response `2026-11-01T11:36:31.6934449Z`.
+UTC request `2026-11-01T12:27:49.2057958Z`; response `2026-11-01T12:27:50.1604481Z`.
 
 **No `tools/call` query was produced.** The observed `tools/list` request is discovery, not a user search or tool query.
 
@@ -4607,7 +5498,7 @@ Exact discovery parameters:
     "io.modelcontextprotocol/clientCapabilities": {
       "sampling": {}
     },
-    "traceparent": "00-398ba1ff2858f3c3edd27a4558abd71c-dec6b6ce83690969-01",
+    "traceparent": "00-356efd4bb89e604f05fd0aa3bbe289ec-30a6cef9f2b59d2f-01",
     "baggage": "<baggage-redacted>"
   }
 }
@@ -4626,15 +5517,15 @@ tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {"errors"
 
 No correlated downstream `tools/call` query/result console event was retrieved. The observed error/consent blocks this captured route before a tool query; missing logs alone do not prove no execution.
 
-Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T11:46:09.698070+00:00`). Hosted service responses are not runtime console logs.
+Pinned hosted console query: **CAPTURED_CORRELATED_LINES** (queried `2026-11-01T12:33:11.062321+00:00`). Hosted service responses are not runtime console logs.
 
 Actual runtime console excerpts (full selected log lines in secondary capture):
 
-UTC `2026-11-01T11:36:31.936390392+00:00`.
+UTC `2026-11-01T12:27:50.418330069+00:00`.
 
 
 ```text
-2026-11-01 11:36:31,936 WARNING agent_framework_foundry_hosting._responses: Consent URL for tool 'observed': <consent-url-redacted>
+2026-11-01 12:27:50,418 WARNING agent_framework_foundry_hosting._responses: Consent URL for tool 'observed': <consent-url-redacted>
 ```
 
 
@@ -4644,13 +5535,13 @@ UTC `2026-11-01T11:36:31.936390392+00:00`.
 
 POST URL: `https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1`. Configured downstream target: `https://abc-custom-mcp-e8383e4d.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp` (configuration is not execution evidence).
 
-Caller-context SHA-256: `+pG4dG7duQJ+rpHM/GrKhQD8DThwyBG1z4GOrz1FE+c=`.
+Caller-context SHA-256: `+0E+xZan/ZrSsqZae2II0b8Sz5KSJmLv3FSkWfreTTY=`.
 
 Exact captured request (only sensitive baggage redacted):
 
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-398ba1ff2858f3c3edd27a4558abd71c-dec6b6ce83690969-01","baggage":"<baggage-redacted>"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"mcp","version":"0.1.0"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"traceparent":"00-356efd4bb89e604f05fd0aa3bbe289ec-30a6cef9f2b59d2f-01","baggage":"<baggage-redacted>"}}}
 ```
 
 
@@ -4658,14 +5549,7 @@ Exact captured response:
 
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "error": {
-    "code": -32006,
-    "message": "tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"CONSENT_REQUIRED\",\"message\":\"<consent-url-redacted>\"}}]}"
-  }
-}
+{"jsonrpc":"2.0","id":2,"error":{"code":-32006,"message":"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"CONSENT_REQUIRED\",\"message\":\"<consent-url-redacted>\"}}]}"}}
 ```
 
 
@@ -4675,25 +5559,71 @@ All APIM exchanges for this invocation:
 ```json
 [
   {
-    "apimRequestId": "6db843c5-c109-4cc4-bf4d-953096b5533d",
+    "apimRequestId": "129dfb25-646c-4a66-a9a4-fc18247d8ef2",
     "callerContextPresent": "True",
-    "callerContextHash": "+pG4dG7duQJ+rpHM/GrKhQD8DThwyBG1z4GOrz1FE+c=",
+    "callerContextHash": "+0E+xZan/ZrSsqZae2II0b8Sz5KSJmLv3FSkWfreTTY=",
     "observedPlatformPrincipalId": "114281a8-d2fe-407c-a1cf-28461136d9af",
-    "requestTimestamp": "2026-11-01T11:36:29.4868012Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-398ba1ff2858f3c3edd27a4558abd71c-825f773f7a9ea1af-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:36:29.6440545Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+        "appid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539667",
+        "iat": "1793535767"
+      },
+      "tokenSha256": "2e73cbf7ed11a5a1398508249990c81232e322ea6148ea62ca08fcca567e8588",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:48.8392866Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-356efd4bb89e604f05fd0aa3bbe289ec-d46042d630608a3c-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:49.0553247Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"resultType\":\"complete\",\"supportedVersions\":[\"2025-11-25\",\"2026-07-28\"],\"capabilities\":{\"tools\":{},\"resources\":{},\"extensions\":{\"io.modelcontextprotocol/skills\":{},\"io.modelcontextprotocol/tasks\":{}}},\"_meta\":{\"io.modelcontextprotocol/serverInfo\":{\"name\":\"Foundry Toolbox MCP\",\"version\":\"1.0.0\"}},\"instructions\":\"This server exposes tools configured in the requested Foundry toolbox. Use tools/list to enumerate available tools and tools/call to invoke them.\",\"ttlMs\":300000,\"cacheScope\":\"private\"}}",
     "backendStatus": 200
   },
   {
-    "apimRequestId": "092f46e9-297e-4f5b-b29f-917f8f00b674",
+    "apimRequestId": "99d8874d-2998-41df-81a0-d2889599363c",
     "callerContextPresent": "True",
-    "callerContextHash": "+pG4dG7duQJ+rpHM/GrKhQD8DThwyBG1z4GOrz1FE+c=",
+    "callerContextHash": "+0E+xZan/ZrSsqZae2II0b8Sz5KSJmLv3FSkWfreTTY=",
     "observedPlatformPrincipalId": "114281a8-d2fe-407c-a1cf-28461136d9af",
-    "requestTimestamp": "2026-11-01T11:36:29.8106109Z",
-    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-398ba1ff2858f3c3edd27a4558abd71c-dec6b6ce83690969-01\",\"baggage\":\"<baggage-redacted>\"}}}",
-    "responseTimestamp": "2026-11-01T11:36:31.6934449Z",
-    "responseBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 2,\n  \"error\": {\n    \"code\": -32006,\n    \"message\": \"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"CONSENT_REQUIRED\\\",\\\"message\\\":\\\"<consent-url-redacted>\\\"}}]}\"\n  }\n}",
+    "platformTokenObservation": {
+      "boundary": "APIM validate-azure-ad-token (https://ai.azure.com)",
+      "validation": "VALIDATED_AT_APIM_ENTRA_BOUNDARY",
+      "header": {
+        "alg": "RS256",
+        "kid": "ryBx-65jNoxH4FQH_6zarNjaNf4"
+      },
+      "claims": {
+        "iss": "https://sts.windows.net/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/",
+        "aud": [
+          "https://ai.azure.com"
+        ],
+        "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+        "oid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+        "appid": "114281a8-d2fe-407c-a1cf-28461136d9af",
+        "idtyp": "app",
+        "ver": "1.0",
+        "exp": "1793539667",
+        "iat": "1793535767"
+      },
+      "tokenSha256": "2e73cbf7ed11a5a1398508249990c81232e322ea6148ea62ca08fcca567e8588",
+      "forwarding": "UNCHANGED_BEARER_NO_APIM_EXCHANGE"
+    },
+    "requestTimestamp": "2026-11-01T12:27:49.2057958Z",
+    "requestBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientInfo\":{\"name\":\"mcp\",\"version\":\"0.1.0\"},\"io.modelcontextprotocol/clientCapabilities\":{\"sampling\":{}},\"traceparent\":\"00-356efd4bb89e604f05fd0aa3bbe289ec-30a6cef9f2b59d2f-01\",\"baggage\":\"<baggage-redacted>\"}}}",
+    "responseTimestamp": "2026-11-01T12:27:50.1604481Z",
+    "responseBody": "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32006,\"message\":\"tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\\\"errors\\\":[{\\\"name\\\":\\\"observed\\\",\\\"type\\\":\\\"mcp\\\",\\\"error\\\":{\\\"code\\\":\\\"CONSENT_REQUIRED\\\",\\\"message\\\":\\\"<consent-url-redacted>\\\"}}]}\"}}",
     "backendStatus": 200
   }
 ]
@@ -4705,22 +5635,22 @@ Actual hosted response (sensitive consent/session identifiers redacted):
 
 ```json
 {
-  "id": "caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb",
+  "id": "caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9",
   "object": "response",
   "output": [
     {
       "id": "<oauth-request-id-redacted>",
-      "response_id": "caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb",
+      "response_id": "caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9",
       "type": "oauth_consent_request",
       "consent_link": "<consent-url-redacted>",
       "server_label": "observed",
       "agent_reference": null
     }
   ],
-  "created_at": 1793532988,
+  "created_at": 1793536067,
   "parallel_tool_calls": false,
   "status": "incomplete",
-  "response_id": "caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb",
+  "response_id": "caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9",
   "agent_reference": {
     "type": "agent_reference",
     "name": "obs-20261031-c-custom",
@@ -4741,362 +5671,362 @@ Runtime query result:
   "scenario": "c-custom",
   "agent": "obs-20261031-c-custom",
   "version": "2",
-  "experimentId": "dc8101ed-8983-41e9-a944-1fb7a69b91ed",
-  "responseId": "caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb",
-  "invocationStartedAt": "2026-11-01T11:36:16.844683+00:00",
-  "invocationCompletedAt": "2026-11-01T11:36:31.171699+00:00",
-  "queriedAt": "2026-11-01T11:46:09.698070+00:00",
+  "experimentId": "9826a721-f60a-4e1e-b13d-51c3ed0dcd73",
+  "responseId": "caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9",
+  "invocationStartedAt": "2026-11-01T12:27:42.424710+00:00",
+  "invocationCompletedAt": "2026-11-01T12:27:49.582437+00:00",
+  "queriedAt": "2026-11-01T12:33:11.062321+00:00",
   "exitCode": 1,
   "errorHttpStatus": null,
   "returnedLineCount": 0,
   "selectedLines": [
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:16.740915107+00:00",
+      "timestamp": "2026-11-01T12:27:42.157112288+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_settings.FoundryStorageSettings: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:16.748858649+00:00",
+      "timestamp": "2026-11-01T12:27:42.164660683+00:00",
       "stream": "stderr",
       "line": "Class azure.ai.agentserver.responses.store._foundry_provider.FoundryStorageProvider: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.178423134+00:00",
+      "timestamp": "2026-11-01T12:27:42.559642653+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,178 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
+      "line": "2026-11-01 12:27:42,559 INFO microsoft.opentelemetry.a365.core.exporters.utils: FIC env vars not set \u2014 falling back to DefaultAzureCredential for A365."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.317553063+00:00",
+      "timestamp": "2026-11-01T12:27:42.688824242+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,317 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
+      "line": "2026-11-01 12:27:42,688 INFO microsoft.opentelemetry._utils: Azure Monitor configured via azure-monitor-opentelemetry package"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,350 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
+      "line": "2026-11-01 12:27:42,719 WARNING microsoft.opentelemetry._distro: Failed to set up A365 OpenAI Agents instrumentation."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "Traceback (most recent call last):"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_distro.py\", line 866, in _setup_a365_openai_agents_instrumentation"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "    from microsoft.opentelemetry._genai._openai_agents._trace_instrumentor import ("
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "        A365OpenAIAgentsInstrumentor,"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "    )"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_instrumentor.py\", line 26, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "    from ._trace_processor import OpenAIAgentsTraceProcessor"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "  File \"/app/pythonenv3.13/lib/python3.13/site-packages/microsoft/opentelemetry/_genai/_openai_agents/_trace_processor.py\", line 15, in <module>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "    from agents import MCPListToolsSpanData"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.351236677+00:00",
+      "timestamp": "2026-11-01T12:27:42.720491990+00:00",
       "stream": "stderr",
       "line": "ModuleNotFoundError: No module named 'agents'"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.354109363+00:00",
+      "timestamp": "2026-11-01T12:27:42.723214069+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,354 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
+      "line": "2026-11-01 12:27:42,723 INFO microsoft.opentelemetry._distro: Azure Monitor enabled."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.354275730+00:00",
+      "timestamp": "2026-11-01T12:27:42.723365524+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,354 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
+      "line": "2026-11-01 12:27:42,723 INFO azure.ai.agentserver: Tracing configured successfully via microsoft-opentelemetry distro."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.354728304+00:00",
+      "timestamp": "2026-11-01T12:27:42.723776327+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,354 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
+      "line": "2026-11-01 12:27:42,723 INFO azure.ai.agentserver: Responses protocol: storage_provider=FoundryStorageProvider, default_model=(not set), default_fetch_history_count=-1, shutdown_grace_period=10s"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.354830352+00:00",
+      "timestamp": "2026-11-01T12:27:42.723870283+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,354 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
+      "line": "2026-11-01 12:27:42,723 WARNING azure.ai.agentserver: Responses resilience: DISABLED - store=true responses run in-process and are NOT durable across an ungraceful crash: a response in-flight when the process is hard-killed stays in_progress on a later GET (no mark-failed/recovery). Enable the Responses task runtime with resilient_background or steerable_conversations."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.598980061+00:00",
+      "timestamp": "2026-11-01T12:27:42.881279623+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,597 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
+      "line": "2026-11-01 12:27:42,881 INFO azure.ai.agentserver: AgentServerHost starting on 0.0.0.0:8088 (async)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.604794410+00:00",
+      "timestamp": "2026-11-01T12:27:42.882040793+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,604 INFO azure.ai.agentserver: AgentServerHost started"
+      "line": "2026-11-01 12:27:42,881 INFO azure.ai.agentserver: AgentServerHost started"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.605528522+00:00",
+      "timestamp": "2026-11-01T12:27:42.882274604+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,605 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
+      "line": "2026-11-01 12:27:42,882 INFO azure.ai.agentserver: Connectivity: project_endpoint=https://fdy-iq-rbac-tbkj2wgzdhqi6.services.ai.azure.com, otlp_endpoint=(not set), appinsights_configured=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.605713529+00:00",
+      "timestamp": "2026-11-01T12:27:42.882389692+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,605 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
+      "line": "2026-11-01 12:27:42,882 INFO azure.ai.agentserver: Host options: shutdown_timeout=30s, protocols=azure-ai-agentserver-core/2.3.0 (python/3.13), azure-ai-agentserver-responses/2.4.0 (python/3.13)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.610584677+00:00",
+      "timestamp": "2026-11-01T12:27:42.883522026+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,606 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
+      "line": "2026-11-01 12:27:42,882 INFO azure.ai.agentserver: TaskManager NOT initialized (no protocol requested task execution). Durable tasks and crash recovery are inactive; store=true work degrades to non-durable execution. tasks_declared=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.612971057+00:00",
+      "timestamp": "2026-11-01T12:27:42.884017857+00:00",
       "stream": "stderr",
-      "line": "[2026-11-01 11:36:17 +0000] [45] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "[2026-11-01 12:27:42 +0000] [40] [INFO] Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.613031149+00:00",
+      "timestamp": "2026-11-01T12:27:42.884046088+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,612 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
+      "line": "2026-11-01 12:27:42,883 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.707477410+00:00",
+      "timestamp": "2026-11-01T12:27:43.355704390+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,707 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 5563d02904a78d87690fdecbfa4d55d1)"
+      "line": "2026-11-01 12:27:43,355 INFO azure.ai.agentserver: Inbound GET /readiness started (trace-id: 2f5df6469b1bdaa3fbf8bd3dd7188e2a)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.709204777+00:00",
+      "timestamp": "2026-11-01T12:27:43.356854890+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,709 INFO azure.ai.agentserver: 192.168.0.1:37330 \"GET /readiness 1.1\" 200 20 1907\u03bcs"
+      "line": "2026-11-01 12:27:43,356 INFO azure.ai.agentserver: 192.168.0.1:56334 \"GET /readiness 1.1\" 200 20 1145\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:17.709490497+00:00",
+      "timestamp": "2026-11-01T12:27:43.356854890+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:17,709 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 1.8ms (trace-id: 5563d02904a78d87690fdecbfa4d55d1)"
+      "line": "2026-11-01 12:27:43,356 INFO azure.ai.agentserver: Inbound GET /readiness completed with status 200 in 0.8ms (trace-id: 2f5df6469b1bdaa3fbf8bd3dd7188e2a)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.300209925+00:00",
+      "timestamp": "2026-11-01T12:27:47.020606296+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,295 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 398ba1ff2858f3c3edd27a4558abd71c, x-ms-client-request-id: 460e6180-c4ff-4913-8303-538640cf3a92, trace-id: 398ba1ff2858f3c3edd27a4558abd71c)"
+      "line": "2026-11-01 12:27:47,020 INFO azure.ai.agentserver: Inbound POST /responses started (x-request-id: 356efd4bb89e604f05fd0aa3bbe289ec, x-ms-client-request-id: 7fc76328-0e21-45e4-9202-fc2c9cae6f7d, trace-id: 356efd4bb89e604f05fd0aa3bbe289ec)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.300209925+00:00",
+      "timestamp": "2026-11-01T12:27:47.026354637+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,299 INFO azure.ai.agentserver: Creating response caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb: streaming=False background=False store=True model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
+      "line": "2026-11-01 12:27:47,021 INFO azure.ai.agentserver: Creating response caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9: streaming=False background=False store=True model= conversation_id=None previous_response_id=None has_user_id=True has_call_id=True"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.300687903+00:00",
+      "timestamp": "2026-11-01T12:27:47.026354637+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,300 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb"
+      "line": "2026-11-01 12:27:47,021 INFO azure.ai.agentserver: Invoking handler ResponsesAgentServerHost._dispatch_create for response caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.713922371+00:00",
+      "timestamp": "2026-11-01T12:27:48.116863387+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,713 INFO azure.identity.aio._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:48,116 INFO azure.identity.aio._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.873219378+00:00",
+      "timestamp": "2026-11-01T12:27:48.292830424+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,873 INFO azure.ai.agentserver: Foundry storage POST ***/storage/responses?api-version=v1 -> 201 (158.8ms, x-ms-client-request-id=7a249aba-d5e8-11f1-a33c-2edc0203a0ec, traceparent=, x-request-id=82665c0f40ddfbfde09b476ffd39645d, apim-request-id=0c345108-4715-413a-bc62-27f5d2895c16, has_call_id=True)"
+      "line": "2026-11-01 12:27:48,292 INFO azure.ai.agentserver: Foundry storage POST ***/storage/responses?api-version=v1 -> 201 (174.5ms, x-ms-client-request-id=a532cf18-d5ef-11f1-ab08-2ecb50edf33a, traceparent=, x-request-id=db249af521dea0c7d56763b212a111ba, apim-request-id=79567d54-460d-40f8-8aa8-ab37aab1b07a, has_call_id=True)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.873938861+00:00",
+      "timestamp": "2026-11-01T12:27:48.294020623+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,873 INFO azure.identity._credentials.environment: No environment configuration found."
+      "line": "2026-11-01 12:27:48,293 INFO azure.identity._credentials.environment: No environment configuration found."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:28.874731621+00:00",
+      "timestamp": "2026-11-01T12:27:48.294524098+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:28,874 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
+      "line": "2026-11-01 12:27:48,294 INFO azure.identity._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:29.083758493+00:00",
+      "timestamp": "2026-11-01T12:27:48.500165209+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:29,083 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:48,500 INFO azure.identity._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:29.616499701+00:00",
+      "timestamp": "2026-11-01T12:27:49.030879301+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:29,616 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:49,030 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:29.637215755+00:00",
+      "timestamp": "2026-11-01T12:27:49.053091794+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:29,637 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:49,053 INFO azure.identity._internal.msal_managed_identity_client: AppServiceCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:29.641734746+00:00",
+      "timestamp": "2026-11-01T12:27:49.058440780+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:29,637 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
+      "line": "2026-11-01 12:27:49,054 INFO azure.identity._internal.decorators: ManagedIdentityCredential.get_token succeeded"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:29.641941493+00:00",
+      "timestamp": "2026-11-01T12:27:49.058642235+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:29,641 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:49,058 INFO azure.identity._credentials.default: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.665770357+00:00",
+      "timestamp": "2026-11-01T12:27:50.135550257+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,665 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
+      "line": "2026-11-01 12:27:50,135 INFO httpx2: HTTP Request: POST https://apim-agentgw-xlen9.azure-api.net/obs-20261031-c-custom/?api-version=v1 \"HTTP/1.1 200 OK\""
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.670078220+00:00",
+      "timestamp": "2026-11-01T12:27:50.139759245+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,670 WARNING azure.ai.agentserver.core._experimental: Class azure.ai.agentserver.core.storage._state.FoundryStateStore: This is an experimental class, and may change at any time."
+      "line": "2026-11-01 12:27:50,139 WARNING azure.ai.agentserver.core._experimental: Class azure.ai.agentserver.core.storage._state.FoundryStateStore: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.670412363+00:00",
+      "timestamp": "2026-11-01T12:27:50.140066493+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,670 INFO azure.identity.aio._credentials.environment: No environment configuration found."
+      "line": "2026-11-01 12:27:50,140 INFO azure.identity.aio._credentials.environment: No environment configuration found."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.670749218+00:00",
+      "timestamp": "2026-11-01T12:27:50.140429371+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,670 INFO azure.identity.aio._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
+      "line": "2026-11-01 12:27:50,140 INFO azure.identity.aio._credentials.managed_identity: ManagedIdentityCredential will use App Service managed identity"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.713638102+00:00",
+      "timestamp": "2026-11-01T12:27:50.190030760+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,713 INFO azure.identity.aio._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
+      "line": "2026-11-01 12:27:50,189 INFO azure.identity.aio._credentials.chained: DefaultAzureCredential acquired a token from ManagedIdentityCredential"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.785687687+00:00",
+      "timestamp": "2026-11-01T12:27:50.284479350+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,785 WARNING azure.ai.agentserver.core: Foundry storage GET ***/storage/state_stores/*?api-version=v1 -> 404 (71.7ms, x-ms-client-request-id=7c1eb5e4-d5e8-11f1-a33c-2edc0203a0ec, traceparent=, x-request-id=604a228f16931123a8bd8e4ae1b4fc69, apim-request-id=cfba75d9-1451-4c0c-9f83-d3bffaf0531e)"
+      "line": "2026-11-01 12:27:50,284 WARNING azure.ai.agentserver.core: Foundry storage GET ***/storage/state_stores/*?api-version=v1 -> 404 (94.1ms, x-ms-client-request-id=a707e616-d5ef-11f1-ab08-2ecb50edf33a, traceparent=, x-request-id=fde35450cd08f698d51816f14f83f829, apim-request-id=4fc99d86-5c87-49a7-bf38-ca7db4466dd8)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.786106968+00:00",
+      "timestamp": "2026-11-01T12:27:50.284838254+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,786 WARNING azure.ai.agentserver.core._experimental: Class azure.ai.agentserver.core.storage._errors.FoundryStorageNotFoundError: This is an experimental class, and may change at any time."
+      "line": "2026-11-01 12:27:50,284 WARNING azure.ai.agentserver.core._experimental: Class azure.ai.agentserver.core.storage._errors.FoundryStorageNotFoundError: This is an experimental class, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.850208203+00:00",
+      "timestamp": "2026-11-01T12:27:50.350654857+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,850 INFO azure.ai.agentserver.core: Foundry storage POST ***/storage/state_stores?api-version=v1 -> 201 (63.5ms, x-ms-client-request-id=7c304d0e-d5e8-11f1-a33c-2edc0203a0ec, traceparent=, x-request-id=604a228f16931123a8bd8e4ae1b4fc69, apim-request-id=8299b073-d18d-4c94-9097-a165cf9ebaba)"
+      "line": "2026-11-01 12:27:50,350 INFO azure.ai.agentserver.core: Foundry storage POST ***/storage/state_stores?api-version=v1 -> 201 (64.8ms, x-ms-client-request-id=a71dfca8-d5ef-11f1-ab08-2ecb50edf33a, traceparent=, x-request-id=fde35450cd08f698d51816f14f83f829, apim-request-id=f62937fc-0267-47df-b725-6c3755bbe74d)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.934865188+00:00",
+      "timestamp": "2026-11-01T12:27:50.417060506+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,934 INFO azure.ai.agentserver.core: Foundry storage POST ***/storage/state_stores/*/items?api-version=v1 -> 201 (83.8ms, x-ms-client-request-id=7c3a1d0c-d5e8-11f1-a33c-2edc0203a0ec, traceparent=, x-request-id=604a228f16931123a8bd8e4ae1b4fc69, apim-request-id=9706adf5-6689-4990-85e9-88ff0da34324)"
+      "line": "2026-11-01 12:27:50,416 INFO azure.ai.agentserver.core: Foundry storage POST ***/storage/state_stores/*/items?api-version=v1 -> 201 (65.6ms, x-ms-client-request-id=a727ff82-d5ef-11f1-ab08-2ecb50edf33a, traceparent=, x-request-id=fde35450cd08f698d51816f14f83f829, apim-request-id=2538fd78-96d5-4af6-84bf-07d24152dc8e)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:31.936390392+00:00",
+      "timestamp": "2026-11-01T12:27:50.418330069+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:31,936 WARNING agent_framework_foundry_hosting._responses: Consent URL for tool 'observed': <consent-url-redacted>"
+      "line": "2026-11-01 12:27:50,418 WARNING agent_framework_foundry_hosting._responses: Consent URL for tool 'observed': <consent-url-redacted>"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.037978160+00:00",
+      "timestamp": "2026-11-01T12:27:50.520563865+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,037 INFO azure.ai.agentserver: Foundry storage POST ***/storage/responses/caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb?api-version=v1 -> 200 (100.6ms, x-ms-client-request-id=7c4747c0-d5e8-11f1-a33c-2edc0203a0ec, traceparent=, x-request-id=82665c0f40ddfbfde09b476ffd39645d, apim-request-id=2019c892-d04c-4488-8682-1881c4d38b07, has_call_id=True)"
+      "line": "2026-11-01 12:27:50,520 INFO azure.ai.agentserver: Foundry storage POST ***/storage/responses/caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9?api-version=v1 -> 200 (101.3ms, x-ms-client-request-id=a73258e2-d5ef-11f1-ab08-2ecb50edf33a, traceparent=, x-request-id=db249af521dea0c7d56763b212a111ba, apim-request-id=c7b51602-2bb9-47ec-bc56-584c8cb46f33, has_call_id=True)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.038329922+00:00",
+      "timestamp": "2026-11-01T12:27:50.520885518+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,038 INFO azure.ai.agentserver: Response caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb completed: status=incomplete output_count=1"
+      "line": "2026-11-01 12:27:50,520 INFO azure.ai.agentserver: Response caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9 completed: status=incomplete output_count=1"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.038621938+00:00",
+      "timestamp": "2026-11-01T12:27:50.521155208+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,038 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:50,521 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.schedule_flush_spans: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.039302263+00:00",
+      "timestamp": "2026-11-01T12:27:50.521762660+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,039 INFO azure.ai.agentserver: 192.168.0.1:36396 \"POST /responses 1.1\" 200 3081 3746143\u03bcs"
+      "line": "2026-11-01 12:27:50,521 INFO azure.ai.agentserver: 192.168.0.1:54366 \"POST /responses 1.1\" 200 3081 3501667\u03bcs"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.039527126+00:00",
+      "timestamp": "2026-11-01T12:27:50.521968299+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,039 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 3742.3ms (x-request-id: 398ba1ff2858f3c3edd27a4558abd71c, x-ms-client-request-id: 460e6180-c4ff-4913-8303-538640cf3a92, trace-id: 398ba1ff2858f3c3edd27a4558abd71c)"
+      "line": "2026-11-01 12:27:50,521 INFO azure.ai.agentserver: Inbound POST /responses completed with status 200 in 3501.1ms (x-request-id: 356efd4bb89e604f05fd0aa3bbe289ec, x-ms-client-request-id: 7fc76328-0e21-45e4-9202-fc2c9cae6f7d, trace-id: 356efd4bb89e604f05fd0aa3bbe289ec)"
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.039676144+00:00",
+      "timestamp": "2026-11-01T12:27:50.522109961+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,039 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
+      "line": "2026-11-01 12:27:50,522 WARNING azure.ai.agentserver.core._experimental: Method azure.ai.agentserver.core._tracing.flush_spans_async: This is an experimental method, and may change at any time."
     },
     {
       "correlatedBySessionAndTime": true,
-      "timestamp": "2026-11-01T11:36:32.858399312+00:00",
+      "timestamp": "2026-11-01T12:27:50.530120090+00:00",
       "stream": "stderr",
-      "line": "2026-11-01 11:36:32,858 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
+      "line": "2026-11-01 12:27:50,530 INFO microsoft.opentelemetry.a365.core.exporters.agent365_exporter: No eligible genAI spans to export; nothing exported.\n"
     }
   ],
   "status": "CAPTURED_CORRELATED_LINES",
@@ -5119,7 +6049,7 @@ Local full sources: `evidence\observability-c-custom.json`, `evidence\observabil
 ```json
 {
   "source": "evidence/observability-c-custom.json#agentResponse",
-  "responseId": "caresp_072513b129f42efa00FbUyLcSGmShgBkil9fwhT75iEIQVVZjb",
+  "responseId": "caresp_0538193c78226294008EDcTB6DBWq6mbnBKvqnIn60ejknFyr9",
   "status": "incomplete",
   "error": null,
   "events": [

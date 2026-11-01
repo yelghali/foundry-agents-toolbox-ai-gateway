@@ -101,6 +101,8 @@ def main():
             "startedAt": run["startedAt"], "completedAt": run["completedAt"],
             "input": run["input"], "hostedHttpStatus": run["httpStatus"],
             "agentResponse": run["agentResponse"],
+            "identityConfiguration": run.get("identityConfiguration", {}),
+            "callerTokenObservation": run.get("callerTokenObservation", {}),
             "apimEndpoint": run["apimEndpoint"], "configuredMcpDestination": run["configuredMcpDestination"],
             "verdict": verdict, "selectedApimExchange": selected,
             "hostedAgentSnapshot": hosted_snapshot(run),

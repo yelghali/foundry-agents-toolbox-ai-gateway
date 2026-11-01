@@ -12,6 +12,10 @@ The workshop now includes six foldable **real logged exchanges** for the optiona
 upstream APIM route, freshly replayed on November 1, 2026 using pinned hosted
 versions. Three numbered stages per scenario show the exact prompt/hosted
 response, generated tool arguments or blocked discovery, and actual log evidence.
+The latest selected captures began at 12:27 UTC. Each scenario also separates
+caller decoded-only, APIM-validated and (where observed) MCP-validated JWT claims
+in a three-hop table. The platform principal is the calling agent instance even
+in A; A custom's project MI is downstream, not the inbound bearer.
 Full captures remain secondary foldables. Captures use nonsensitive replay data; SDK baggage,
 opaque consent URLs/session state and credentials must never be published.
 It also includes six hosted **service response snapshots** (not runtime console
@@ -90,14 +94,24 @@ Source support alone does not verify browser rendering. The fresh November 1,
 (displayed build `sha.99e0e09`) served locally on an attached, workshop-only server.
 Local npm restoration was unavailable; public renderer assets were fetched
 read-only into memory, while the workshop and SVGs remained local. No workshop
-source was uploaded or published. The browser-fetched Markdown SHA-256 matched
-the local file exactly:
-`66571458c3ac4d2f3d2f1747dea309f757edfa50d04e409680214f29d87d452c`.
+source was uploaded or published. The latest identity-hop edition reused the
+existing attached preview and public renderer checkout without another install.
+Its browser-fetched Markdown SHA-256 matched the local file exactly:
+`7fffdc1747243a7597c52ce2ac462ac7ea67c804c6235878c80f939a2384fc29`
+(321010 bytes).
 All ten pages rendered, all five SVGs loaded, and all 16 details blocks opened
 and closed with their code visible when open. The 18 scenario stages were visible
 outside details; there were no duplicate heading IDs, raw fences, broken images
-or hidden sidebar targets. Cleanup was last, with no Next button. Repeat this
-exact-source check after edits; the attached helper was stopped after verification.
+or hidden sidebar targets. Cleanup was last, with no Next button.
+Six identity lessons and all 18 numbered stages rendered outside details.
+Embedded model Markdown uses longer outer fences so an actual fenced answer
+cannot hide the next stage. Python AST, JSON and PowerShell parsing passed for
+16, 58 and 19 snippets respectively. The complete current offline suite ran
+82 tests: 77 passed, 5 skipped (superseding the earlier 76-test review).
+Current browser results are saved locally in
+`evidence\workshop-render-review-current.json`; the earlier review remains
+historical. Repeat this exact-source check after edits. This check reused an
+already-running attached helper; it did not start or detach a new server.
 
 ## Catalog submission (manual)
 

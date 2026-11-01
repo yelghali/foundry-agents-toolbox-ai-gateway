@@ -39,13 +39,14 @@ def main():
             version="2024-05-01",
         )["properties"]
         diagnostics[scenario] = all(
-            properties[side][direction]["body"]["bytes"] == 8192
+            properties[side][direction]["body"]["bytes"] == 0
             and properties[side][direction]["headers"] == []
             for side in ("frontend", "backend") for direction in ("request", "response")
         )
     unchanged = json.loads(baseline.read_text())["originalAgentEndpoints"] == original
     evidence = {"time": now(), "originalDefaultsUnchangedAcrossReplays": unchanged,
-                "isolated8192ByteBodyOnlyDiagnostics": diagnostics, "originalAgentEndpoints": original}
+                "isolatedRawBodyDiagnosticsDisabled": diagnostics,
+                "safeTraceBodyLimitBytes": 8192, "originalAgentEndpoints": original}
     write(ROOT / "evidence" / "observability-isolation-audit.json", evidence)
     print("Original default endpoints unchanged:", unchanged, "isolated diagnostics:", diagnostics)
     if not unchanged or not all(diagnostics.values()):

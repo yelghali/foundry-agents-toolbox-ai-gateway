@@ -1,6 +1,7 @@
 """Standalone application-token MCP target; never acquires or exchanges tokens."""
 
 import contextvars
+import hashlib
 import json
 import os
 import uuid
@@ -12,6 +13,7 @@ from fastmcp import FastMCP
 from starlette.responses import JSONResponse
 
 IDENTITY = contextvars.ContextVar("application_identity", default=None)
+TOKEN_OBSERVATION = contextvars.ContextVar("validated_token_observation", default=None)
 mcp = FastMCP("Application identity probe", include_fastmcp_meta=False)
 
 
@@ -40,7 +42,9 @@ class ApplicationTokenValidator:
                 or claims["oid"] not in self.expected_principals):
             raise jwt.InvalidTokenError("Application principal not authorized")
         # Only validated identifiers are returned; no token, user PII or arbitrary claims.
-        return {name: claims[name] for name in ("tid", "oid", "aud", "iss", "ver")}
+        return {name: claims[name] for name in
+                ("tid", "oid", "aud", "iss", "ver", "appid", "azp", "roles", "idtyp", "exp", "iat")
+                if name in claims}
 
 
 @mcp.tool
@@ -54,6 +58,7 @@ def identity_probe(experiment_id: str) -> dict:
         "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
         "experiment_id": experiment_id,
         "claims": identity,
+        "tokenObservation": TOKEN_OBSERVATION.get(),
     }
     print(json.dumps({
         "event": "validated_mcp_exchange",
@@ -85,11 +90,25 @@ class EntraBoundary:
                 {"error": "invalid_application_token"}, status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )(scope, receive, send)
+        header = jwt.get_unverified_header(token)
+        observation = {
+            "boundary": "application MCP signature/issuer/audience/principal validation",
+            "validation": "VALIDATED_AT_MCP_BOUNDARY",
+            "header": {name: header[name] for name in ("alg", "kid") if name in header},
+            "claims": identity,
+            "tokenSha256": hashlib.sha256(token.encode()).hexdigest(),
+        }
+        print(json.dumps({
+            "event": "application_mcp_auth_validated", "tokenObservation": observation,
+            "method": scope["method"], "path": scope["path"],
+        }), flush=True)
         handle = IDENTITY.set(identity)
+        token_handle = TOKEN_OBSERVATION.set(observation)
         try:
             await self.app(scope, receive, send)
         finally:
             IDENTITY.reset(handle)
+            TOKEN_OBSERVATION.reset(token_handle)
 
 
 def create_app(validator):

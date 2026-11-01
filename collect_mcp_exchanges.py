@@ -48,6 +48,7 @@ def main():
                 continue
             if body.get("event") not in (
                 "validated_mcp_exchange", "custom_mcp_tool",
+                "application_mcp_auth_validated",
                 "custom_mcp_auth_validated", "custom_mcp_auth_rejected",
             ):
                 continue
