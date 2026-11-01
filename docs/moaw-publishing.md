@@ -14,7 +14,10 @@ opaque consent URLs/session state and credentials must never be published.
 It also includes six hosted **service response snapshots** (not runtime console
 logs), the actual A-custom validated MCP console event, and a six-path evidence
 matrix. Missing console logs and unobserved Search internals are explicit.
-Before publishing updated excerpts, validate them against local ignored evidence:
+Before publishing updated excerpts, validate them against local ignored evidence.
+Those exports are not available from a fresh clone; generate them with the
+optional replay in an existing configured ABC lab, or retain the historical
+embedded excerpts without claiming a new runtime check:
 
 ```powershell
 python .\compile_observability_evidence.py
@@ -43,13 +46,16 @@ Then copy the workshop assets:
 ```powershell
 Copy-Item .\foundry-agents-toolbox-ai-gateway\assets .\moaw\workshops\foundry-identity\assets -Recurse
 Set-Location .\moaw
-npm install
-npm start
+npm install --workspace=website --include-workspace-root
+npm run start --workspace=website -- --host 127.0.0.1 --port 4200
 ```
 
 Open `http://localhost:4200/workshop/?src=foundry-identity/`. These npm commands
 belong to **MOAW**, not this Python infrastructure repository. Stop the preview
 server afterward. Verify all pages, the architecture image, navigation and links.
+Use `step=0` through `step=9` for the ten pages. Old bookmarks such as `step=12`
+are out of range after consolidation; remove `step` or navigate from the first
+page. MOAW does not clamp an invalid step to the last page.
 The workshop uses absolute GitHub implementation links because its sample code lives
 outside the MOAW asset directory. Implementation links target `main`; maintain them
 alongside code changes.
@@ -74,8 +80,19 @@ prerequisites and deployment commands are collapsed.
 MOAW's [marked options](https://github.com/microsoft/moaw/blob/main/packages/website/src/app/shared/markdown.ts)
 retain raw HTML, and its [bootstrap configuration](https://github.com/microsoft/moaw/blob/main/packages/website/src/main.ts)
 sets `sanitize: SecurityContext.NONE`, preserving these browser-native elements.
-This verifies source support, not a running frontend: browser foldability and
-all-page rendering remain unverified until the preview procedure above is run.
+Source support alone does not verify browser rendering. On November 1, 2026,
+the latest local workshop was previewed with the real MOAW Angular renderer at
+upstream commit `99e0e09fd5f5f6c2324aa679967d10910014640c`.
+The browser-fetched Markdown SHA-256 matched the local file exactly:
+`af78d4375ac8473cc8279971ed43c0c07f5d20905b537726e8d892fcd1427fa3`.
+All ten pages rendered, all five SVGs loaded (architecture plus four tracks),
+and all 17 details blocks opened and closed with their code visible when open.
+There were 64 rendered fenced code blocks, no duplicate heading IDs or raw
+fences, and no hidden sidebar heading targets. C deployment headings use level
+three so closed details do not create inaccessible level-two menu entries.
+The public source had a different hash; this was a local-source check, not a
+claim that the unpublished changes rendered on public MOAW. Repeat the check
+after every workshop edit; the preview helper was stopped after verification.
 
 ## Catalog submission (manual)
 
