@@ -71,9 +71,9 @@
 </text>
 <rect x="840" y="515" width="250" height="145" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
 <text x="965.0" y="565.9" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#000000">
-<tspan x="965.0" dy="0">User token / OBO</tspan>
-<tspan x="965.0" dy="21.6">Verified: trusted IQ</tspan>
-<tspan x="965.0" dy="21.6">OAuth + APIM fallback</tspan>
+<tspan x="965.0" dy="0">UserEntraToken: IQ</tspan>
+<tspan x="965.0" dy="21.6">Custom: OAuth2 consent</tspan>
+<tspan x="965.0" dy="21.6">Not literal OAuth OBO</tspan>
 </text>
 <text x="70" y="696" text-anchor="start" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#000000">
 <tspan x="70" dy="0">Same project != automatic agent-to-agent permission. Configure agent references and supported orchestration explicitly.</tspan>
@@ -85,7 +85,7 @@
 <rect x="1220" y="315" width="250" height="145" rx="10" fill="#FFF4CE" stroke="#F7630C" stroke-width="2"/>
 <text x="1345.0" y="355.1" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#000000">
 <tspan x="1345.0" dy="0">APIM data gateway</tspan>
-<tspan x="1345.0" dy="21.6">validate caller / OBO</tspan>
+<tspan x="1345.0" dy="21.6">validate bearer token</tspan>
 <tspan x="1345.0" dy="21.6">log path + oid</tspan>
 <tspan x="1345.0" dy="21.6">body logging off</tspan>
 </text>

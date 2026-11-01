@@ -1,7 +1,40 @@
 """Compile verdicts only from real correlated APIM and validated MCP evidence."""
 
 import json
-from replay_observability import ROOT, now, write
+from replay_observability import ROOT, now, safe, write
+
+
+def hosted_snapshot(run):
+    """Keep service-returned tool events, not model narrative or consent payloads."""
+    response = run["agentResponse"]
+    events = []
+    for event in response.get("output", []):
+        kind = event.get("type")
+        if kind not in ("function_call", "function_call_output", "oauth_consent_request"):
+            continue
+        fields = ("type", "name", "call_id", "arguments", "output", "status")
+        events.append({key: event[key] for key in fields if key in event})
+    error = response.get("error")
+    if error and len(error.get("message", "")) > 240:
+        error = {
+            "code": error.get("code"),
+            "messageExcerpt": error["message"][:240],
+            "observedErrorCodes": [
+                code for code in ("AADSTS500016", "AgentInstanceClientId")
+                if code in error["message"]
+            ],
+            "fullError": f"evidence/observability-{run['scenario']}.json#agentResponse.error",
+        }
+    return safe({
+        "source": f"evidence/observability-{run['scenario']}.json#agentResponse",
+        "responseId": response.get("id"),
+        "status": response.get("status"),
+        "error": error,
+        "events": events,
+        "runtimeConsoleLog": "NOT_CAPTURED",
+        "limitation": "Hosted service response snapshot; not a runtime console log. "
+                      "No new invocation or telemetry retrieval performed.",
+    })
 
 
 def main():
@@ -66,6 +99,7 @@ def main():
             "startedAt": run["startedAt"], "completedAt": run["completedAt"],
             "apimEndpoint": run["apimEndpoint"], "configuredMcpDestination": run["configuredMcpDestination"],
             "verdict": verdict, "selectedApimExchange": selected,
+            "hostedAgentSnapshot": hosted_snapshot(run),
             "mcpValidatedQueryResultEvents": matching,
             "observedMcpDestination": (
                 mcp["containers"]["application"]["observedContainer"] if matching else "NOT_OBSERVED"

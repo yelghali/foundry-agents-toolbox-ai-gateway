@@ -100,7 +100,7 @@
 <rect x="1015" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>
 <text x="1029" y="654" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#000000">
 <tspan x="1029" dy="0">Toolbox</tspan>
-<tspan x="1029" dy="23.799999999999997">managed user OBO</tspan>
+<tspan x="1029" dy="23.799999999999997">UserEntraToken</tspan>
 </text>
 <path d="M1255,670 h70" stroke="#495057" stroke-width="2" marker-end="url(#arrow)"/>
 <rect x="1340" y="615" width="230" height="110" rx="10" fill="#DFF6DD" stroke="#107C10" stroke-width="2"/>

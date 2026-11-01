@@ -102,7 +102,7 @@ flowchart LR
 flowchart LR
     U["Signed-in Entra user"] --> G["APIM before agent<br/>validates user token"]
     G --> C["Project C<br/>prompt-c / hosted-c"]
-    C --> T["Toolbox<br/>UserEntraToken / OBO"]
+    C --> T["Toolbox<br/>managed UserEntraToken"]
     T --> K["Trusted Foundry IQ KB C"]
     K --> S["Search index C"]
     G -. "user oid + correlation" .-> AI["App Insights C"]
@@ -110,7 +110,7 @@ flowchart LR
 
 - **Goal:** authorization follows the signed-in user.
 - Project C and its agents have no Search data roles.
-- The managed OBO path was verified for trusted Foundry IQ. The broker rejected Microsoft user tokens sent to the tested arbitrary Search/custom MCP endpoints; use generic OAuth plus APIM OBO for customer-controlled endpoints.
+- The managed user-token path was verified for trusted Foundry IQ. The broker rejected Microsoft user tokens sent to the tested arbitrary Search/custom MCP endpoints. The custom API sample instead uses Toolbox OAuth2 authorization-code consent; it does not demonstrate literal JWT-bearer OBO or an APIM token exchange.
 - APIM is before the agent to observe the human caller. APIM cannot see the KB's internal Search source queries.
 - **Code/test:** [`UserEntraToken` IQ connection](provision.py), [user-token APIM ingress](configure_user_ingress.py), [backend-result assertions](test_routes.py), [live OBO suite](verify.ps1).
 

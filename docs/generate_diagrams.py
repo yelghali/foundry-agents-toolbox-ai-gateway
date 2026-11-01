@@ -62,7 +62,7 @@ def main():
             "User", "Prompt / hosted\nagent B", "Toolbox\nagent credential", "APIM\nagent Search token", "Search B\nindex-b / kb-b",
         ], "APIM sees each agent's distinct oid. BC -> Search C / KB C is denied."),
         ("c", 615, "C - End-user identity", "#107C10", "#DFF6DD", [
-            "User", "APIM\nuser platform token", "Prompt / hosted\nagent C", "Toolbox\nmanaged user OBO", "IQ KB C\nlocal index-c",
+            "User", "APIM\nuser platform token", "Prompt / hosted\nagent C", "Toolbox\nUserEntraToken", "IQ KB C\nlocal index-c",
         ], "APIM correlates the user; no Search data grant to project C or its agents."),
     ]
     for label, y, title, color, fill, boxes, note in rows:
@@ -233,7 +233,7 @@ def generate_secure_architecture():
     )
     box(
         "user-identity", 840, 515,
-        "User token / OBO\nVerified: trusted IQ\nOAuth + APIM fallback",
+        "UserEntraToken: IQ\nCustom: OAuth2 consent\nNot literal OAuth OBO",
         "#107C10", "#DFF6DD", 250, 145,
     )
     text(
@@ -245,7 +245,7 @@ def generate_secure_architecture():
     container("data-plane", 1180, 235, 690, 500, "#D13438", "2. Enforce resource boundaries")
     box(
         "data-apim", 1220, 315,
-        "APIM data gateway\nvalidate caller / OBO\nlog path + oid\nbody logging off",
+        "APIM data gateway\nvalidate bearer token\nlog path + oid\nbody logging off",
         "#F7630C", "#FFF4CE", 250, 145,
     )
     box("boundary-a", 1530, 280, "Boundary A\nSearch service A + KB A", "#0078D4", "#CFE4FA", 290, 105)

@@ -39,7 +39,31 @@ AppTraces
 - A upstream Toolbox gateway sees the platform/project token. Correlate its opaque caller-context hash with hosted user audit; the token's `oid` is not automatically a human.
 - B downstream data gateway sees the original agent Search token. Its actual raw Search path identifies `index-b`; its KB path identifies `kb-b`, not the internal source queries.
 - C agent ingress sees and validates the initiating user's delegated platform token. It logs user `oid`, request ID and response status while Search user tokens stay on trusted first-party hops.
-- Gateway diagnostics record zero request/response body bytes and no authorization headers.
+- Original gateway diagnostics record zero request/response body bytes and no authorization headers.
+  The optional six `obs-20261031-*` upstream APIs are deliberately separate:
+  they capture at most 8192 body bytes and no headers. Do not apply their body
+  capture settings to original or confidential routes.
+
+## Six optional upstream captures
+
+The [workshop evidence matrix](../workshop.md#six-path-evidence-matrix-historical-optional-upstream-apim-run)
+separates APIM bodies, hosted service response snapshots and actual validated MCP
+events for A/B/C native/custom. The persisted
+[consolidated evidence](../evidence/observability-real-exchanges.json) records
+configured destinations separately from observed destinations.
+
+Only A native and A custom passed this optional run. Both B paths lack agent
+instance context, C native failed with `AADSTS500016`, and C custom requires
+consent. The original direct C custom success is not this upstream APIM run.
+Hosted response snapshots are **not runtime console logs**; console capture is
+`NOT_CAPTURED` for these selected invocations. Native Search internal queries and
+fan-out remain `NOT_OBSERVED`.
+
+For fresh telemetry, scope the query to the selected run's UTC start/end and
+recorded APIM request ID rather than the entire project. Allow ingestion delay;
+an expired or empty result is unavailable evidence, not proof of no execution.
+Do not export Authorization, raw caller context, JWTs or consent URLs. The
+historical excerpts do not claim a new live run.
 
 ## Actual KB source activity
 

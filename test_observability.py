@@ -9,6 +9,26 @@ import replay_observability as replay
 
 
 class ObservabilityTests(unittest.TestCase):
+    def test_hosted_snapshot_excludes_consent_payload_and_model_narrative(self):
+        from compile_observability_evidence import hosted_snapshot
+        snapshot = hosted_snapshot({
+            "scenario": "c-custom",
+            "agentResponse": {
+                "id": "response-test", "status": "completed",
+                "output": [
+                    {"type": "oauth_consent_request", "consent_link": "private-url"},
+                    {"type": "message", "content": "unverified model claim"},
+                    {"type": "function_call", "call_id": "call-test",
+                     "name": "observed___identity_probe", "arguments": "{}"},
+                ],
+            },
+        })
+        text = json.dumps(snapshot)
+        self.assertNotIn("private-url", text)
+        self.assertNotIn("unverified model claim", text)
+        self.assertEqual(snapshot["events"][0], {"type": "oauth_consent_request"})
+        self.assertEqual(snapshot["runtimeConsoleLog"], "NOT_CAPTURED")
+
     def test_sensitive_values_are_removed(self):
         value = {
             "Authorization": "Bearer secret",

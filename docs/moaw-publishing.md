@@ -11,6 +11,9 @@ No separate `index.yml` is required by that guidance.
 The workshop now includes six foldable **real logged exchanges** for the optional
 upstream APIM route. Captures are historical, nonsensitive replay data; SDK baggage,
 opaque consent URLs/session state and credentials must never be published.
+It also includes six hosted **service response snapshots** (not runtime console
+logs), the actual A-custom validated MCP console event, and a six-path evidence
+matrix. Missing console logs and unobserved Search internals are explicit.
 Before publishing updated excerpts, validate them against local ignored evidence:
 
 ```powershell

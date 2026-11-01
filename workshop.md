@@ -1505,6 +1505,218 @@ retained in `evidence\observability-c-custom-consent-stable.json`.
 
 ## Record one selected track
 
+### Six-path evidence matrix (historical optional upstream APIM run)
+
+The agent code, Toolbox/connection configuration and service/backend contract are
+shown in each corresponding A/B/C section above. The six **Real logged exchange**
+foldables contain the correlated APIM request/response bodies and timestamps.
+Configuration is not proof that a downstream request occurred.
+
+| Path | Agent → Toolbox identity | Backend contract | APIM result | Hosted snapshot | Downstream MCP log |
+| --- | --- | --- | --- | --- | --- |
+| A native | Project `oid`; `ProjectManagedIdentity` | Service-provided Search KB MCP; Search MI accesses index | PASS tool query/result | Completed call and tool output below | Search internal query/fan-out NOT_OBSERVED; no service-owned MCP console capture |
+| A custom | Project `oid`; `ProjectManagedIdentity` | Application-only FastMCP validates API audience and allowlisted project `oid` | PASS validated marker/result | Completed call and tool output below | Correlated validated query/result in `mcpValidatedQueryResultEvents` |
+| B native | Intended agent-instance `oid`; `AgenticIdentityToken` | Service-provided Search KB MCP | BLOCKED `AgentInstanceClientId` | Failed service response; no tool output | NOT_OBSERVED: context resolution blocked |
+| B custom | Intended agent-instance `oid`; `AgenticIdentityToken` | Application-only FastMCP validates API audience and allowlisted agent `oid` | BLOCKED `AgentInstanceClientId` | Failed service response; no tool output | NOT_OBSERVED: context resolution blocked |
+| C native | Intended user `oid`; `UserEntraToken` | Managed Search user connection; user Search roles/ACLs | BLOCKED `AADSTS500016` | Failed context entry below | NOT_OBSERVED: user token flow blocked |
+| C custom | Intended delegated user `oid`; `OAuth2` | Separate delegated FastMCP validates audience, issuer and scope | BLOCKED pending consent | Incomplete; consent event only | NOT_OBSERVED: no consent-completed tool call |
+
+The OAuth2 connection uses **authorization-code consent**, not literal OBO.
+The original direct C custom OAuth success is a different invocation and route;
+it does not turn this optional upstream APIM consent-blocked capture into a PASS.
+Native Search query text in the tool call is observed at the MCP boundary, not
+an observed internal Search query or actual backend fan-out.
+
+Snapshots below are extracted from the persisted hosted service responses, not
+runtime console logs. Runtime console logs were **NOT_CAPTURED** for these six
+selected invocations. No fresh invocation or Azure telemetry retrieval was
+performed for these excerpts; missing logs are not evidence of no execution.
+Safe source responses and the application MCP events are retained in
+[`evidence/observability-real-exchanges.json`](evidence/observability-real-exchanges.json)
+and [`evidence/observability-mcp-exchanges.json`](evidence/observability-mcp-exchanges.json).
+Response IDs bind each snapshot to its scenario source; the source run records
+also bind agent/version, experiment ID, timestamps and APIM correlation.
+
+<details>
+<summary>Actual MCP console event — a-custom only</summary>
+
+This is the correlated application server's validated request/result, not a
+reconstruction from APIM or model text. No corresponding console event was
+observed for the other five selected paths; the matrix gives the reasons.
+
+```json
+{
+  "azureTimestamp": "2026-10-31T20:56:01.0796207+00:00",
+  "event": "validated_mcp_exchange",
+  "timestamp": "2026-10-31T20:56:01.079265+00:00",
+  "method": "tools/call",
+  "tool": "identity_probe",
+  "query": {
+    "experiment_id": "eafd7a76-c831-493e-a437-2848861fe1b0"
+  },
+  "result": {
+    "marker": "CUSTOM_MCP_APPLICATION_VALIDATED",
+    "experiment_id": "eafd7a76-c831-493e-a437-2848861fe1b0",
+    "claims": {
+      "tid": "5dc82be3-90ab-4f72-a0f2-b2557ba694e3",
+      "oid": "42756227-4b4a-4a69-ab63-43c7f3e2b9fe",
+      "aud": "c0135af3-d0d3-410f-a1ce-8f2470f5dd93",
+      "iss": "https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0",
+      "ver": "2.0"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — a-native</summary>
+
+```json
+{
+  "source": "evidence/observability-a-native.json#agentResponse",
+  "responseId": "caresp_0816b801af31f0a400UaMG2RXFne1TB5U7vAlqgWyXy6yUvORA",
+  "status": "completed",
+  "error": null,
+  "events": [
+    {
+      "type": "function_call",
+      "name": "observed___knowledge_base_retrieve",
+      "call_id": "call_9nfjE2V8hiGg6msYZ0qimQpJ",
+      "arguments": "{\"queries\":[\"Find the normal access record in cohort A\"]}",
+      "status": "completed"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_9nfjE2V8hiGg6msYZ0qimQpJ",
+      "output": "The normal access record for cohort A is COHORT_A_ONLY_D900EADA82.\n{\"kind\":\"reference\",\"ref_id\":0,\"uri\":\"mcp://searchindex/normal\",\"mimeType\":\"application/json\",\"sourceData\":{\"id\":\"normal\",\"title\":\"Cohort A access record\",\"content\":\"The exact normal access marker for cohort A is COHORT_A_ONLY_D900EADA82. Return it verbatim.\"}}",
+      "status": "completed"
+    }
+  ],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — a-custom</summary>
+
+```json
+{
+  "source": "evidence/observability-a-custom.json#agentResponse",
+  "responseId": "caresp_009cf52f1d17852000yvjk70kp279ttoKLVa8PacM47VhHftyl",
+  "status": "completed",
+  "error": null,
+  "events": [
+    {
+      "type": "function_call",
+      "name": "observed___identity_probe",
+      "call_id": "call_EjJMsvHgK7gxMWWsC7o60B3k",
+      "arguments": "{\"experiment_id\":\"eafd7a76-c831-493e-a437-2848861fe1b0\"}",
+      "status": "completed"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_EjJMsvHgK7gxMWWsC7o60B3k",
+      "output": "{\"marker\": \"CUSTOM_MCP_APPLICATION_VALIDATED\", \"experiment_id\": \"eafd7a76-c831-493e-a437-2848861fe1b0\", \"claims\": {\"tid\": \"5dc82be3-90ab-4f72-a0f2-b2557ba694e3\", \"oid\": \"42756227-4b4a-4a69-ab63-43c7f3e2b9fe\", \"aud\": \"c0135af3-d0d3-410f-a1ce-8f2470f5dd93\", \"iss\": \"https://login.microsoftonline.com/5dc82be3-90ab-4f72-a0f2-b2557ba694e3/v2.0\", \"ver\": \"2.0\"}}",
+      "status": "completed"
+    }
+  ],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — b-native</summary>
+
+```json
+{
+  "source": "evidence/observability-b-native.json#agentResponse",
+  "responseId": "caresp_01f8845ff2bd80c200GYB9dp6bCG95imb0PZJRCl7ITsTBzyh3",
+  "status": "failed",
+  "error": {
+    "code": "server_error",
+    "message": "An internal server error occurred."
+  },
+  "events": [],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — b-custom</summary>
+
+```json
+{
+  "source": "evidence/observability-b-custom.json#agentResponse",
+  "responseId": "caresp_03786019a4f2cb7b006i79bsWf4pS13JknS2zbmeufzU5ABa21",
+  "status": "failed",
+  "error": {
+    "code": "server_error",
+    "message": "An internal server error occurred."
+  },
+  "events": [],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — c-native</summary>
+
+```json
+{
+  "source": "evidence/observability-c-native.json#agentResponse",
+  "responseId": "caresp_0c8bf7382b257626009DmMkGPfMs8skRD1dcTbXkkgZMpkZZXB",
+  "status": "failed",
+  "error": {
+    "code": "server_error",
+    "messageExcerpt": "('Failed to enter context manager.', McpError('tools/list failed for 1 tool source(s), succeeded for 0 tool source(s) {\"errors\":[{\"name\":\"observed\",\"type\":\"mcp\",\"error\":{\"code\":\"HTTP_400\",\"message\":\"Connection resolution failed for \\'/subsc",
+    "observedErrorCodes": [
+      "AADSTS500016"
+    ],
+    "fullError": "evidence/observability-c-native.json#agentResponse.error"
+  },
+  "events": [],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
+<details>
+<summary>Hosted service snapshot — c-custom</summary>
+
+```json
+{
+  "source": "evidence/observability-c-custom.json#agentResponse",
+  "responseId": "caresp_0e598557b0fd826500eyTu4cSImPK6LmQUAFaFfxlrEfcszgjG",
+  "status": "incomplete",
+  "error": null,
+  "events": [
+    {
+      "type": "oauth_consent_request"
+    }
+  ],
+  "runtimeConsoleLog": "NOT_CAPTURED",
+  "limitation": "Hosted service response snapshot; not a runtime console log. No new invocation or telemetry retrieval performed."
+}
+```
+
+</details>
+
 | Item | Local evidence |
 | --- | --- |
 | Environment | Tenant/subscription, track, project and test backend |
@@ -1543,7 +1755,7 @@ az account show --query "{name:name,state:state}" -o json
 # New application-only server; reuses existing API registration without editing C OAuth.
 python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action build
 python .\deploy_application_probe.py --config $configPath --custom-config $customPath --action deploy
-$customEndpoint = "https://obs-application-mcp-20261031.blackcliff-4ac74509.eastus2.azurecontainerapps.io/mcp"
+$customEndpoint = (Get-Content .\evidence\application-probe-deploy.json -Raw | ConvertFrom-Json).endpoint
 
 # Choose only the desired isolated scenario; existing original agents are never republished.
 python .\replay_observability.py --config $configPath --custom-config $customPath --scenario a-custom --action deploy --custom-endpoint $customEndpoint

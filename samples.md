@@ -36,6 +36,13 @@ redeploying. HTTP 200 alone is not success; consent, tool and session errors fai
 
 For the unchanged deployed lab, see [reproduction and evidence](./README.md).
 Independent samples do not import or modify its implementation.
+For all six native/custom optional upstream routes, see the workshop's
+[evidence matrix](./workshop.md#six-path-evidence-matrix-historical-optional-upstream-apim-run).
+That historical experiment uses different probe agents/Toolboxes from the direct
+sample invocations described below: A passed, B lacked agent context, C native
+failed user-token resolution, and C custom remained consent-blocked.
+Hosted service snapshots are not runtime console logs, and a configured Search
+target does not establish observed Search internal queries.
 
 Offline validation from the repository root:
 
