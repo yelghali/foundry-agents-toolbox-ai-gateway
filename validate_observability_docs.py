@@ -1,6 +1,7 @@
 """Verify workshop bodies/timestamps against persisted real APIM evidence."""
 
 import json
+import re
 from replay_observability import ROOT, now, write
 from compile_observability_evidence import hosted_snapshot
 
@@ -45,6 +46,19 @@ def main():
     )
     checks["sixFoldableRealExchanges"] = workshop.count("<summary>Real logged exchange") == 6
     checks["sixHostedSnapshots"] = workshop.count("<summary>Hosted service snapshot") == 6
+    pages = re.split(r"\n---\n", workshop)[1:]
+    checks["tenCoherentPages"] = len(pages) == 10
+    checks["cleanupLast"] = pages[-1].lstrip().startswith("# Cleanup and next steps")
+    for index, scenarios in (
+        (4, ("a-native", "a-custom")),
+        (5, ("b-native", "b-custom")),
+        (6, ("c-native",)),
+        (7, ("c-custom",)),
+    ):
+        checks[f"scenarioPage{index + 1}OwnsEvidence"] = all(
+            f"<summary>Hosted service snapshot — {scenario}</summary>" in pages[index]
+            for scenario in scenarios
+        ) and "<summary>Real logged exchange" in pages[index]
     checks["sixScenarioCoverage"] = {c["scenario"] for c in captures} == {
         "a-native", "a-custom", "b-native", "b-custom", "c-native", "c-custom",
     } and len(captures) == 6
