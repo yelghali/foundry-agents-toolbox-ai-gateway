@@ -10,7 +10,11 @@ and original hosted agent/caller remain unchanged.
 
 ## Custom application-token target (A)
 
-**Offline contract verified; LIVE custom audience token acquisition is UNVERIFIED.**
+**Offline contract verified; verify live acquisition in your own environment.**
+The workshop's isolated October 31, 2026 A-custom replay captured a real
+custom-audience token, validated project principal and correlated MCP result.
+That historical allow does not certify every tenant/runtime or establish a
+paired live allow/deny test for this copied sample.
 The [Toolbox authentication documentation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)
 documents project identity connections with a configurable target and audience.
 That is the supported connection mechanism, not proof that this tenant's hosted

@@ -453,7 +453,8 @@ authorization. It requires the expected project principal, and a configured
 explicit principal allowlist (ACL, not role enforcement); it must reject delegated-user
 tokens. Call `identity_probe(experiment_id="<synthetic UUID>")`; the tool returns
 `CUSTOM_MCP_APPLICATION_VALIDATED` and safe validated identifier claims, not JWTs
-or arbitrary queries. Logging is disabled by default; protect any captured results.
+or arbitrary queries. The complete server prints validated query/result audit
+events to stdout; protect those logs and captured results.
 
 ### Server code → validated project identity
 
@@ -520,8 +521,10 @@ label configuration inference separately from captured identity evidence. Contin
 
 ## Optional APIM evidence: A native and custom MCP
 
-These are actual **hosted agent → APIM → Toolbox → MCP** runs, not illustrative
-payloads. Original agents/default traffic remain direct and unchanged. API names
+These are **historical captures from October 31, 2026** of actual
+**hosted agent → APIM → Toolbox → MCP** runs, not illustrative payloads or a
+fresh deployment check. The successful calls do not establish a paired live
+allow/deny test for either target. Original agents/default traffic remain direct and unchanged. API names
 start with `obs-20261031-`; body diagnostics are enabled only there, at 8192 bytes,
 with **no logged request/response headers**. Tokens, consent URLs and SDK baggage
 (opaque session/user propagation metadata) are redacted from exported evidence.
@@ -891,13 +894,14 @@ IDs, not invoking user, project MI, blueprint application ID or agent name.
 An Entra agent identity is platform-created, not a hand-created confidential
 OAuth client. The custom API's actual validated `oid` mapping remains experimental
 until observed with that hosted instance and custom audience. Do not infer it
-from the successful native Search flow.
+from a native Search configuration or a different agent's successful call.
 
 The server validates signature, issuer, audience and expiry, then authorizes an
 explicit agent principal allowlist. The sample uses ACL authorization rather
 than role enforcement. Call `identity_probe` with a synthetic experiment UUID;
 the result returns only safe validated identifier claims and marker
-`CUSTOM_MCP_APPLICATION_VALIDATED`. Logging is off by default.
+`CUSTOM_MCP_APPLICATION_VALIDATED`. The complete server prints validated
+query/result audit events to stdout; protect those logs.
 Two hosted identities with only one allowed
 must produce backend allow/deny, with no project-identity fallback.
 
@@ -963,6 +967,10 @@ access and ensure project MI is not a fallback reader. Unavailable identity work
 is a blocker, not an allow. Continue to evidence/cleanup.
 
 ## Optional APIM evidence: B native and custom MCP
+
+These are historical October 31, 2026 captures, not fresh runtime checks.
+Both paths failed before downstream invocation; neither proves an authorization
+allow/deny or custom-audience token acquisition.
 
 <details>
 <summary>Real logged exchange — B native KB: BLOCKED at agent-instance context resolution</summary>
@@ -1125,7 +1133,7 @@ Search checks the user's RBAC, without custom OAuth client or MCP server code.
 <details>
 <summary>Deploy C native: prerequisites, user authorization, roles and commands</summary>
 
-## Prerequisites / registration / consent
+### Prerequisites / registration / consent
 
 - Trusted Search KB, platform-managed user context supported by the hosted runtime.
   **No custom API/client registration, secret or callback**; do not substitute FastMCP.
@@ -1135,7 +1143,7 @@ Search checks the user's RBAC, without custom OAuth client or MCP server code.
 - Intended user completes any platform connection authorization in browser;
   tenant restrictions may require admin approval. Retry afresh, never auto-follow consent URLs.
 
-## Deployment checklist
+### Deployment checklist
 
 - From clone root, install/configure/provision:
 
@@ -1250,6 +1258,9 @@ Describe managed native user access, not an unobserved OBO exchange. Continue to
 
 ## Optional APIM evidence: C native MCP
 
+This is a historical October 31, 2026 capture, not a fresh runtime check.
+Token resolution failed before Search authorization; it is not a user RBAC denial.
+
 <details>
 <summary>Real logged exchange — C UserEntraToken native KB: BLOCKED by AADSTS500016</summary>
 
@@ -1341,7 +1352,7 @@ Your FastMCP boundary validates that token before dispatching `probe_echo`; this
 <details>
 <summary>Deploy C custom: app registration, consent, HTTPS hosting and commands</summary>
 
-## Prerequisites / registration / consent
+### Prerequisites / registration / consent
 
 - Custom delegated API, **not native Search**. Entra app developer/admin creates
   two single-tenant registrations in **Entra ID → App registrations**:
@@ -1355,7 +1366,7 @@ Your FastMCP boundary validates that token before dispatching `probe_echo`; this
   from the intended user's connection authorization; subscription roles grant neither.
 - Project admin grants invoker/runtime model/Toolbox access.
 
-## Deployment checklist
+### Deployment checklist
 
 - Server terminal, from clone root:
 
@@ -1608,6 +1619,9 @@ the consenting user may differ from a later caller.
 
 ## Optional APIM evidence: C custom MCP
 
+This is a historical October 31, 2026 capture, not a fresh runtime check.
+The consent challenge is not a delegated API call or an authorization denial.
+
 <details>
 <summary>Real logged exchange — C OAuth custom FastMCP: BLOCKED pending existing-connection consent</summary>
 
@@ -1727,9 +1741,11 @@ Snapshots in the corresponding scenario are extracted from the persisted hosted 
 runtime console logs. Runtime console logs were **NOT_CAPTURED** for these six
 selected invocations. No fresh invocation or Azure telemetry retrieval was
 performed for these excerpts; missing logs are not evidence of no execution.
-Safe source responses and the application MCP events are retained in
-[`evidence/observability-real-exchanges.json`](evidence/observability-real-exchanges.json)
-and [`evidence/observability-mcp-exchanges.json`](evidence/observability-mcp-exchanges.json).
+Safe source responses and the application MCP events are retained locally in
+`evidence\observability-real-exchanges.json`
+and `evidence\observability-mcp-exchanges.json`. These exports are ignored by Git
+and are not downloaded by cloning the public repository. The embedded historical
+excerpts are readable here; generate your own local evidence for a new replay.
 Response IDs bind each snapshot to its scenario source; the source run records
 also bind agent/version, experiment ID, timestamps and APIM correlation.
 
@@ -1822,6 +1838,11 @@ Keep an inventory of newly created resources/roles/connections/Toolboxes/version
 Never delete pre-existing/shared resources.
 
 - Stop/delete hosted deployments and custom hosting first.
+- If you ran the optional observability extension, inventory and remove only
+  its six `obs-20261031-*` APIM APIs and their dedicated backends/loggers/diagnostics,
+  isolated hosted agents/Toolboxes, two custom downstream connections and
+  `obs-application-mcp-20261031` container resources. Do not remove original
+  ABC routes, shared loggers or the pre-existing C OAuth connection.
 - Remove workshop connections/Toolboxes/agents through supported Foundry management.
 - Delete dedicated, newly created `abc-*` projects in the **existing Foundry account**.
 - Save role assignment IDs before deleting identities. Remove workshop Foundry roles
