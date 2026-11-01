@@ -9,7 +9,10 @@ No separate `index.yml` is required by that guidance.
 ## Preview
 
 The workshop now includes six foldable **real logged exchanges** for the optional
-upstream APIM route. Captures are historical, nonsensitive replay data; SDK baggage,
+upstream APIM route, freshly replayed on November 1, 2026 using pinned hosted
+versions. Three numbered stages per scenario show the exact prompt/hosted
+response, generated tool arguments or blocked discovery, and actual log evidence.
+Full captures remain secondary foldables. Captures use nonsensitive replay data; SDK baggage,
 opaque consent URLs/session state and credentials must never be published.
 It also includes six hosted **service response snapshots** (not runtime console
 logs), the actual A-custom validated MCP console event, and a six-path evidence
@@ -20,7 +23,9 @@ optional replay in an existing configured ABC lab, or retain the historical
 embedded excerpts without claiming a new runtime check:
 
 ```powershell
+python .\collect_hosted_runtime_logs.py --config $configPath
 python .\compile_observability_evidence.py
+python .\update_observability_workshop.py
 python .\validate_observability_docs.py
 ```
 
@@ -80,19 +85,19 @@ prerequisites and deployment commands are collapsed.
 MOAW's [marked options](https://github.com/microsoft/moaw/blob/main/packages/website/src/app/shared/markdown.ts)
 retain raw HTML, and its [bootstrap configuration](https://github.com/microsoft/moaw/blob/main/packages/website/src/main.ts)
 sets `sanitize: SecurityContext.NONE`, preserving these browser-native elements.
-Source support alone does not verify browser rendering. On November 1, 2026,
-the latest local workshop was previewed with the real MOAW Angular renderer at
-upstream commit `99e0e09fd5f5f6c2324aa679967d10910014640c`.
-The browser-fetched Markdown SHA-256 matched the local file exactly:
-`af78d4375ac8473cc8279971ed43c0c07f5d20905b537726e8d892fcd1427fa3`.
-All ten pages rendered, all five SVGs loaded (architecture plus four tracks),
-and all 17 details blocks opened and closed with their code visible when open.
-There were 64 rendered fenced code blocks, no duplicate heading IDs or raw
-fences, and no hidden sidebar heading targets. C deployment headings use level
-three so closed details do not create inaccessible level-two menu entries.
-The public source had a different hash; this was a local-source check, not a
-claim that the unpublished changes rendered on public MOAW. Repeat the check
-after every workshop edit; the preview helper was stopped after verification.
+Source support alone does not verify browser rendering. The fresh November 1,
+2026 replay edition was previewed with the official MOAW Angular static runtime
+(displayed build `sha.99e0e09`) served locally on an attached, workshop-only server.
+Local npm restoration was unavailable; public renderer assets were fetched
+read-only into memory, while the workshop and SVGs remained local. No workshop
+source was uploaded or published. The browser-fetched Markdown SHA-256 matched
+the local file exactly:
+`66571458c3ac4d2f3d2f1747dea309f757edfa50d04e409680214f29d87d452c`.
+All ten pages rendered, all five SVGs loaded, and all 16 details blocks opened
+and closed with their code visible when open. The 18 scenario stages were visible
+outside details; there were no duplicate heading IDs, raw fences, broken images
+or hidden sidebar targets. Cleanup was last, with no Next button. Repeat this
+exact-source check after edits; the attached helper was stopped after verification.
 
 ## Catalog submission (manual)
 

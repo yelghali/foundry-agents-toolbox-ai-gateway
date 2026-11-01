@@ -46,7 +46,7 @@ AppTraces
 
 ## Six optional upstream captures
 
-The [workshop evidence matrix](../workshop.md#six-path-evidence-matrix-historical-optional-upstream-apim-run)
+The [workshop evidence matrix](../workshop.md#six-path-evidence-matrix-fresh-november-1-upstream-apim-replay)
 separates APIM bodies, hosted service response snapshots and actual validated MCP
 events for A/B/C native/custom. The persisted
 [consolidated evidence](../evidence/observability-real-exchanges.json) records
@@ -55,15 +55,33 @@ configured destinations separately from observed destinations.
 Only A native and A custom passed this optional run. Both B paths lack agent
 instance context, C native failed with `AADSTS500016`, and C custom requires
 consent. The original direct C custom success is not this upstream APIM run.
-Hosted response snapshots are **not runtime console logs**; console capture is
-`NOT_CAPTURED` for these selected invocations. Native Search internal queries and
-fan-out remain `NOT_OBSERVED`.
+The six paths were invoked again on November 1, 2026 using existing pinned hosted
+versions and fresh sessions, without redeploying or changing original defaults.
+Each scenario now presents three stages: exact user prompt and actual hosted
+response; generated MCP `tools/call` arguments or blocked `tools/list` discovery;
+and observed MCP/runtime logs. Full sanitized captures are secondary foldables.
+Hosted response snapshots are **not runtime console logs**. The read-only
+`collect_hosted_runtime_logs.py --config <ignored-config>` command queries the
+last 300 console lines of each pinned hosted version. If that CLI stream is
+unavailable, it uses the supported SDK session SSE stream, selecting only a
+unique version/time-matched session and filtering lines to the invocation window.
+Session identifiers remain memory-only. `--session-only` avoids retrying a known
+unavailable CLI endpoint. Availability/correlation is recorded in
+`evidence\observability-hosted-runtime.json`; uncorrelated errors are not
+attributed to the new replay. Native Search internal queries and
+fan-out remain `NOT_OBSERVED`; successful MCP responses through APIM are observed.
+In the November 1 replay, the CLI container stream was unavailable, but the SDK
+session stream returned time-correlated console lines for all six invocations.
+That runtime evidence does not turn the four blocked tool paths into successes.
 
 For fresh telemetry, scope the query to the selected run's UTC start/end and
 recorded APIM request ID rather than the entire project. Allow ingestion delay;
 an expired or empty result is unavailable evidence, not proof of no execution.
 Do not export Authorization, raw caller context, JWTs or consent URLs. The
-historical excerpts do not claim a new live run.
+historical UUID-named captures remain separate from the fresh selected run.
+After collecting APIM/MCP/runtime logs, run `compile_observability_evidence.py`,
+`update_observability_workshop.py` and `validate_observability_docs.py` to refresh
+and verify exact embedded strings. Never substitute expected/synthesized queries.
 
 ## Actual KB source activity
 

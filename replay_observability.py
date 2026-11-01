@@ -286,6 +286,7 @@ AppTraces
         run["verdict"] = "BLOCKED_BEFORE_TOOL_CALL" if not calls else "TOOL_CALL_CAPTURED_REVIEW_ACTUAL_RESULT"
         run["searchDownstreamQueryVisibility"] = "NOT_OBSERVED_AT_UPSTREAM_APIM"
         write(latest, run)
+        write(ROOT / "evidence" / f"observability-{record['scenario']}-{run['experimentId']}.json", run)
     write(ROOT / "evidence" / ("observability-" + record["scenario"] + "-apim.json"), data)
     print(record["scenario"], "APIM trace rows", len(response.json()["tables"][0]["rows"]))
 

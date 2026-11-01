@@ -31,9 +31,9 @@ def hosted_snapshot(run):
         "status": response.get("status"),
         "error": error,
         "events": events,
-        "runtimeConsoleLog": "NOT_CAPTURED",
+        "runtimeConsoleLog": "NOT_A_RUNTIME_LOG",
         "limitation": "Hosted service response snapshot; not a runtime console log. "
-                      "No new invocation or telemetry retrieval performed.",
+                      "Runtime console retrieval is recorded separately; model text is not tool evidence.",
     })
 
 
@@ -43,6 +43,8 @@ def main():
     application = mcp["containers"]["application"].get("events", [])
     deployment = json.loads((directory / "application-probe-check.json").read_text())
     expected_principals = deployment["expectedApplicationPrincipalIds"]
+    runtime_path = directory / "observability-hosted-runtime.json"
+    runtime = {item["scenario"]: item for item in json.loads(runtime_path.read_text())["captures"]} if runtime_path.exists() else {}
     captures = []
     for scenario in ("a-native", "a-custom", "b-native", "b-custom", "c-native", "c-custom"):
         run = json.loads((directory / f"observability-{scenario}.json").read_text())
@@ -97,9 +99,12 @@ def main():
             "scenario": scenario, "agent": run["agent"], "agentVersion": run["version"],
             "toolboxVersion": run["toolboxVersion"], "experimentId": run["experimentId"],
             "startedAt": run["startedAt"], "completedAt": run["completedAt"],
+            "input": run["input"], "hostedHttpStatus": run["httpStatus"],
+            "agentResponse": run["agentResponse"],
             "apimEndpoint": run["apimEndpoint"], "configuredMcpDestination": run["configuredMcpDestination"],
             "verdict": verdict, "selectedApimExchange": selected,
             "hostedAgentSnapshot": hosted_snapshot(run),
+            "hostedRuntimeLogQuery": runtime.get(scenario, {"status": "NOT_QUERIED"}),
             "mcpValidatedQueryResultEvents": matching,
             "observedMcpDestination": (
                 mcp["containers"]["application"]["observedContainer"] if matching else "NOT_OBSERVED"
