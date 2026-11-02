@@ -52,33 +52,43 @@ events for A/B/C native/custom. The persisted
 [consolidated evidence](../evidence/observability-real-exchanges.json) records
 configured destinations separately from observed destinations.
 
-Only A native and A custom passed this optional run. Both B paths lack agent
-instance context, C native failed with `AADSTS500016`, and C custom requires
-consent. The original direct C custom success is not this upstream APIM run.
+A native, A custom and the post-consent C custom replay passed this optional run.
+Both B paths lack agent instance context; C native failed with `AADSTS500016`.
+C custom's new success is the upstream APIM route, not the earlier direct-route success.
 The six paths were invoked again on November 1, 2026 using existing pinned hosted
 versions and fresh sessions, without redeploying or changing original defaults.
 Each scenario now presents three stages: exact user prompt and actual hosted
 response; generated MCP `tools/call` arguments or blocked `tools/list` discovery;
-and observed MCP/runtime logs. Full sanitized captures are secondary foldables.
+and observed MCP/runtime logs. Selected sanitized raw bodies and service snapshots
+are folded; repeated all-exchange arrays, full hosted responses and runtime/MCP logs
+are linked using JSON Pointers into retained local ignored evidence. Those links
+are unavailable in a fresh public clone. The validator resolves the linked JSON
+and checks the exact scenario/value instead of requiring repeated inline dumps.
 Hosted response snapshots are **not runtime console logs**. The read-only
 `collect_hosted_runtime_logs.py --config <ignored-config>` command queries the
 last 300 console lines of each pinned hosted version. If that CLI stream is
 unavailable, it uses the supported SDK session SSE stream, selecting only a
 unique version/time-matched session and filtering lines to the invocation window.
 Session identifiers remain memory-only. `--session-only` avoids retrying a known
-unavailable CLI endpoint. Availability/correlation is recorded in
+unavailable CLI endpoint. `--scenario c-custom` refreshes only that runtime capture,
+preserving the other five. `collect_mcp_exchanges.py --kind delegated --since <UTC>`
+merges fresh delegated events while preserving application evidence.
+Availability/correlation is recorded in
 `evidence\observability-hosted-runtime.json`; uncorrelated errors are not
 attributed to the new replay. Native Search internal queries and
 fan-out remain `NOT_OBSERVED`; successful MCP responses through APIM are observed.
 In the November 1 replay, the CLI container stream was unavailable, but the SDK
 session stream returned time-correlated console lines for all six invocations.
-That runtime evidence does not turn the four blocked tool paths into successes.
+Runtime logs alone do not turn blocked tool paths into successes.
 
-The latest six selected invocations started at **12:27 UTC on November 1**.
+Five selected invocations remain the **12:27 UTC November 1** captures.
+Only C custom was replayed after consent: **13:09:39.229822–13:09:57.035724 UTC**,
+experiment `f4fe017e-d8db-44a9-aa6c-36207d916e7c`.
 Each workshop scenario now has a three-hop identity table and exact selected JWT
 header/claim observations. Caller credentials are **decoded only, not locally
 validated**; platform credentials are **APIM-validated**; A custom's correlated
-application token is **MCP-validated**. Only `alg`, `kid`, issuer, audience,
+application token and C custom's delegated claims are **MCP-validated**. Only available
+`alg`, `kid`, issuer, audience,
 tenant/principal/client IDs, scopes/roles, identity/version and validity times
 are shown. Raw JWTs, signatures, keys and opaque token metadata are excluded.
 
@@ -87,11 +97,22 @@ audience to the **project managed identity/custom API audience**. This is
 platform-managed acquisition, not a traced internal JWT-bearer OBO grant.
 A native's successful Search response does not expose its backend token:
 configured project MI/Search audience remain **NOT_OBSERVED** token claims.
-The blocked B/C paths likewise have no observed backend token. Missing `roles`
-does not imply failure; C's configured delegated scopes are not observed `scp`.
-Earlier direct C custom authorization-code/refresh success is separate from
-the current upstream consent-pending invocation; original B direct and
-downstream-gateway results must also remain separately labelled.
+The blocked B/C-native paths likewise have no observed backend token. Missing `roles`
+does not imply failure. Post-consent C custom now observes user `oid`
+`c6982fed-3a65-46cb-a80f-d5093b79e3e4`, custom API `aud`
+`c0135af3-d0d3-410f-a1ce-8f2470f5dd93`, `scp: access_as_user` and OAuth client
+`azp: bd0cc73c-e7ec-4fb5-9b74-3c2fdc5b37af`. APIM-validated platform `oid`
+`114281a8-d2fe-407c-a1cf-28461136d9af` is the calling agent instance, not that user.
+The exact APIM `structuredContent` equals hosted `function_call_output`;
+the UUID-correlated `custom_mcp_tool` console event matches its arguments and claims,
+with a matching authentication event within the APIM request/response window.
+This delegated server logs neither the full return nor JWT header/validity times:
+do not synthesize those fields. Signature, issuer, audience, tenant and scope are
+validated by the deployed MCP boundary; caller `oid` and configured OAuth `azp`
+are checked during evidence compilation. This existing authorization-code/refresh
+connection is not a traced JWT-bearer OBO grant.
+Earlier direct C custom and pre-consent UUID captures remain separate; original B
+direct and downstream-gateway results must also remain separately labelled.
 
 For fresh telemetry, scope the query to the selected run's UTC start/end and
 recorded APIM request ID rather than the entire project. Allow ingestion delay;
@@ -100,7 +121,7 @@ Do not export Authorization, raw caller context, JWTs or consent URLs. The
 historical UUID-named captures remain separate from the fresh selected run.
 After collecting APIM/MCP/runtime logs, run `compile_observability_evidence.py`,
 `update_observability_workshop.py` and `validate_observability_docs.py` to refresh
-and verify exact embedded strings. Never substitute expected/synthesized queries.
+and verify exact embedded strings and linked JSON values. Never substitute expected/synthesized queries.
 
 ## Actual KB source activity
 

@@ -10,6 +10,89 @@ import replay_observability as replay
 
 
 class ObservabilityTests(unittest.TestCase):
+    def test_linked_evidence_requires_exact_value_scenario_and_pointer(self):
+        from validate_observability_docs import linked_evidence
+        root, path = MagicMock(), MagicMock()
+        root.__truediv__.return_value = path
+        path.resolve.return_value = path
+        path.is_relative_to.return_value = True
+        path.is_file.return_value = True
+        value = {"status": "completed", "output": []}
+        path.read_text.return_value = json.dumps({"scenario": "a-native", "agentResponse": value})
+        link = "[Full response](evidence/observability-a-native.json#/agentResponse)"
+        with patch("validate_observability_docs.ROOT", root):
+            self.assertTrue(linked_evidence(link, value, "agentResponse", "a-native"))
+            self.assertFalse(linked_evidence(link, {}, "agentResponse", "a-native"))
+            self.assertFalse(linked_evidence(link, value, "agentResponse", "b-native"))
+            self.assertFalse(linked_evidence(link.replace("#/agentResponse", ""),
+                                             value, "agentResponse", "a-native"))
+            path.is_relative_to.return_value = False
+            self.assertFalse(linked_evidence(link, value, "agentResponse", "a-native"))
+
+    def test_delegated_evidence_requires_real_query_identity_and_exact_hosted_result(self):
+        from copy import deepcopy
+        from compile_observability_evidence import delegated_evidence
+        claims = {"oid": "user", "tid": "tenant", "aud": "api",
+                  "iss": "https://login.microsoftonline.com/tenant/v2.0",
+                  "scp": "access_as_user", "azp": "oauth-client"}
+        arguments = {"experiment_id": "experiment", "message": "oauth-toolbox", "count": 2}
+        result = {"marker": "CUSTOM_MCP_ENTRA_VALIDATED", "arguments": arguments, "claims": claims}
+        run = {"experimentId": "experiment",
+               "callerTokenObservation": {"claims": {"oid": "user"}},
+               "agentResponse": {"status": "completed", "output": [
+                   {"type": "function_call_output", "output": json.dumps(result)}]}}
+        selected = {"backendStatus": 200, "requestTimestamp": "2026-11-01T13:09:54Z",
+                    "responseTimestamp": "2026-11-01T13:09:56Z",
+                    "requestBody": json.dumps({"method": "tools/call", "params": {"arguments": arguments}}),
+                    "responseBody": json.dumps({"result": {"structuredContent": result, "isError": False}})}
+        container = {"validationConfiguration": {
+            "tenantId": "tenant", "audience": "api", "scope": "access_as_user",
+            "oauthClientId": "oauth-client"},
+            "events": [
+                {"event": "custom_mcp_auth_validated", "claims": claims,
+                 "method": "POST", "path": "/mcp", "azureTimestamp": "2026-11-01T13:09:55Z"},
+                {"event": "custom_mcp_tool", "claims": claims, "arguments": arguments,
+                 "azureTimestamp": "2026-11-01T13:09:55.01Z"}]}
+        events, observation, passed = delegated_evidence(run, selected, result, container)
+        self.assertTrue(passed)
+        self.assertEqual(events, container["events"])
+        self.assertEqual(observation["claims"], claims)
+        self.assertNotIn("header", observation)
+        self.assertNotIn("result", events[1])
+        for mutation in ("stale", "wrong-user", "wrong-client", "missing-auth", "wrong-hosted"):
+            with self.subTest(mutation=mutation):
+                changed_run, changed_container = deepcopy(run), deepcopy(container)
+                if mutation == "stale":
+                    changed_container["events"][1]["azureTimestamp"] = "2026-11-01T12:09:55Z"
+                elif mutation == "wrong-user":
+                    changed_run["callerTokenObservation"]["claims"]["oid"] = "other"
+                elif mutation == "wrong-client":
+                    changed_container["validationConfiguration"]["oauthClientId"] = "other"
+                elif mutation == "missing-auth":
+                    changed_container["events"] = changed_container["events"][1:]
+                else:
+                    changed_run["agentResponse"]["output"][0]["output"] = "{}"
+                self.assertFalse(delegated_evidence(changed_run, selected, result, changed_container)[2])
+
+    def test_scoped_mcp_collection_preserves_existing_application_events(self):
+        import argparse
+        import collect_mcp_exchanges as collector
+        application = {"observedContainer": "application", "events": [{"event": "kept"}]}
+        existing = {"containers": {"application": application}}
+        custom = {"tenantId": "tenant", "apiAppId": "api", "scope": "api://api/access_as_user",
+                  "oauthClientId": "client", "containerApp": "delegated", "resourceGroup": "rg"}
+        config_path, root = MagicMock(), MagicMock()
+        config_path.read_text.return_value = json.dumps(custom)
+        root.__truediv__.return_value.__truediv__.return_value.read_text.return_value = json.dumps(existing)
+        args = argparse.Namespace(custom_config=config_path, since="2026-11-01T13:00:00Z", kind="delegated")
+        with patch.object(collector, "ROOT", root), \
+                patch.object(collector.argparse.ArgumentParser, "parse_args", return_value=args), \
+                patch.object(collector.subprocess, "run", return_value=MagicMock(returncode=0, stdout="")) as command, \
+                patch.object(collector, "write") as write:
+            collector.main()
+        command.assert_called_once()
+        self.assertEqual(write.call_args.args[1]["containers"]["application"], application)
+
     def test_token_excerpt_only_exports_safe_selected_claims(self):
         from update_observability_workshop import block, token_excerpt
         observation = {
@@ -90,8 +173,8 @@ class ObservabilityTests(unittest.TestCase):
         self.assertIn("| User → agent |", rendered)
         self.assertIn("| Agent → APIM → Toolbox |", rendered)
         self.assertIn("| Toolbox → MCP | **NOT_OBSERVED** token", rendered)
-        self.assertIn("calling agent instance", rendered)
-        self.assertIn("Missing `scp`, `roles` or `idtyp`", rendered)
+        self.assertIn("Matching APIM `oid`", rendered)
+        self.assertIn("Configured identities (not token observations)", rendered)
         capture["selectedApimExchange"]["requestBody"] = json.dumps({
             "method": "tools/call", "params": {"name": "actual_tool",
                                              "arguments": {"queries": ["exact generated query"]}},

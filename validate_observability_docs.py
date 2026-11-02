@@ -7,6 +7,30 @@ from compile_observability_evidence import hosted_snapshot
 from update_observability_workshop import scenario_section, token_excerpt
 
 
+def linked_evidence(workshop, expected, field, scenario):
+    """Require a real link resolving to the exact retained JSON value, not just a filename."""
+    from urllib.parse import unquote
+    for target in re.findall(r"\]\((evidence/[^)]+)\)", workshop):
+        filename, separator, pointer = target.partition("#")
+        if not separator or not pointer.startswith("/") or not pointer.endswith("/" + field):
+            continue
+        path = (ROOT / unquote(filename)).resolve()
+        if not path.is_relative_to((ROOT / "evidence").resolve()) or not path.is_file():
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            owner = value
+            for part in pointer[1:].split("/"):
+                owner = value
+                key = unquote(part).replace("~1", "/").replace("~0", "~")
+                value = value[int(key)] if isinstance(value, list) else value[key]
+            if owner.get("scenario") == scenario and value == expected:
+                return True
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            continue
+    return False
+
+
 def main():
     captures = json.loads((ROOT / "evidence" / "observability-real-exchanges.json").read_text())["captures"]
     workshop = (ROOT / "workshop.md").read_text(encoding="utf-8")
@@ -38,7 +62,8 @@ def main():
         checks[capture["scenario"] + "-mcp"] = all(
             json.dumps(event, indent=2) in workshop
             for event in capture["mcpValidatedQueryResultEvents"]
-        )
+        ) or linked_evidence(workshop, capture["mcpValidatedQueryResultEvents"],
+                             "mcpValidatedQueryResultEvents", capture["scenario"])
         checks[capture["scenario"] + "-input"] = capture["input"] in workshop
         checks[capture["scenario"] + "-exact-current-section"] = scenario_section(capture) in workshop
         caller = capture["callerTokenObservation"]
@@ -52,10 +77,14 @@ def main():
             and platform.get("claims", {}).get("oid")
             == capture["identityConfiguration"]["agentInstancePrincipalId"]
         )
-        checks[capture["scenario"] + "-hosted-full"] = json.dumps(capture["agentResponse"], indent=2) in workshop
+        checks[capture["scenario"] + "-hosted-full"] = (
+            json.dumps(capture["agentResponse"], indent=2) in workshop
+            or linked_evidence(workshop, capture["agentResponse"], "agentResponse", capture["scenario"])
+        )
         runtime = capture["hostedRuntimeLogQuery"]
         checks[capture["scenario"] + "-runtime"] = (
-            json.dumps(runtime, indent=2) in workshop
+            (json.dumps(runtime, indent=2) in workshop
+             or linked_evidence(workshop, runtime, "hostedRuntimeLogQuery", capture["scenario"]))
             and runtime.get("experimentId") == run["experimentId"]
             and runtime.get("responseId") == run["agentResponse"].get("id")
         )
@@ -77,10 +106,27 @@ def main():
         "| User → agent |", "| Agent → APIM → Toolbox |", "| Toolbox → MCP |",
     ))
     checks["downstreamApplicationValidated"] = all(
-        json.dumps(token_excerpt(event["result"]["tokenObservation"]), indent=2) in workshop
+        (json.dumps(token_excerpt(event["result"]["tokenObservation"]), indent=2) in workshop
+         or linked_evidence(workshop, capture["mcpValidatedQueryResultEvents"],
+                            "mcpValidatedQueryResultEvents", capture["scenario"]))
         and event["result"]["tokenObservation"]["validation"] == "VALIDATED_AT_MCP_BOUNDARY"
-        for capture in captures for event in capture["mcpValidatedQueryResultEvents"]
+        for capture in captures if capture["scenario"] in ("a-custom", "b-custom")
+        for event in capture["mcpValidatedQueryResultEvents"]
     )
+    from compile_observability_evidence import delegated_evidence
+    c_custom = next(c for c in captures if c["scenario"] == "c-custom")
+    if c_custom["verdict"] == "PASS_VALIDATED_DELEGATED_MCP_QUERY_RESULT":
+        run = json.loads((ROOT / "evidence" / "observability-c-custom.json").read_text())
+        mcp = json.loads((ROOT / "evidence" / "observability-mcp-exchanges.json").read_text())
+        selected = c_custom["selectedApimExchange"]
+        result = json.loads(selected["responseBody"])["result"]["structuredContent"]
+        events, observation, passed = delegated_evidence(run, selected, result, mcp["containers"]["delegated"])
+        checks["downstreamDelegatedValidated"] = (
+            passed and events == c_custom["mcpValidatedQueryResultEvents"]
+            and observation == c_custom["mcpTokenObservation"]
+            and json.dumps(token_excerpt(observation), indent=2) in workshop
+            and "post-consent upstream C custom replay passed" in workshop
+        )
     checks["threeStagesPerScenario"] = all(
         workshop.count(stage) == 6 for stage in (
             "**1. User input → actual hosted response**",

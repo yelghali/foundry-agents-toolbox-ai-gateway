@@ -83,10 +83,17 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--session-only", action="store_true",
                         help="Use the scoped SDK session log stream after an unavailable CLI endpoint")
+    parser.add_argument("--scenario", choices=("a-native", "a-custom", "b-native", "b-custom",
+                                              "c-native", "c-custom"),
+                        help="Refresh only this scenario, preserving the other selected captures")
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
-    captures = []
+    output = ROOT / "evidence" / "observability-hosted-runtime.json"
+    captures = (json.loads(output.read_text())["captures"]
+                if args.scenario and output.exists() else [])
     for scenario, record in json.loads(STATE.read_text())["scenarios"].items():
+        if args.scenario and scenario != args.scenario:
+            continue
         cohort = next(item for item in config["cohorts"] if item["label"] == scenario[0])
         endpoint = urlsplit(cohort["project"]["endpoint"])
         run = json.loads((ROOT / "evidence" / f"observability-{scenario}.json").read_text())
@@ -139,6 +146,7 @@ def main():
                                         "session IDs remain memory-only. Not a complete invocation log.")
         except subprocess.TimeoutExpired:
             capture = {"scenario": scenario, "queriedAt": now(), "status": "RUNTIME_LOG_QUERY_TIMEOUT"}
+        captures = [item for item in captures if item["scenario"] != scenario]
         captures.append(capture)
         print(scenario, capture["status"], flush=True)
     write(ROOT / "evidence" / "observability-hosted-runtime.json",

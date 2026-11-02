@@ -1,6 +1,7 @@
 """Compile verdicts only from real correlated APIM and validated MCP evidence."""
 
 import json
+from datetime import datetime
 from replay_observability import ROOT, now, safe, write
 
 
@@ -37,6 +38,66 @@ def hosted_snapshot(run):
     })
 
 
+def delegated_evidence(run, selected, actual_result, container):
+    """Correlate unchanged console arguments/claims with APIM and hosted tool output."""
+    if not selected or not isinstance(actual_result, dict):
+        return [], {}, False
+    request = json.loads(selected.get("requestBody", "{}"))
+    if request.get("method") != "tools/call":
+        return [], {}, False
+    args = request.get("params", {}).get("arguments")
+    claims = actual_result.get("claims", {})
+    config = container.get("validationConfiguration", {})
+    caller = run.get("callerTokenObservation", {}).get("claims", {})
+    if not config or not caller.get("oid"):
+        return [], {}, False
+
+    def timestamp(value):
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+    start, end = timestamp(selected["requestTimestamp"]), timestamp(selected["responseTimestamp"])
+    scoped = [event for event in container.get("events", [])
+              if start <= timestamp(event["azureTimestamp"]) <= end]
+    tools = [event for event in scoped if event.get("event") == "custom_mcp_tool"
+             and event.get("arguments") == args == actual_result.get("arguments")
+             and event.get("arguments", {}).get("experiment_id") == run["experimentId"]
+             and event.get("claims") == claims]
+    auth = [event for event in scoped if event.get("event") == "custom_mcp_auth_validated"
+            and event.get("method") == "POST" and event.get("path") == "/mcp"
+            and event.get("claims") == claims
+            and tools and timestamp(event["azureTimestamp"]) <= timestamp(tools[0]["azureTimestamp"])]
+    if len(tools) != 1 or not auth:
+        return [], {}, False
+    # This server logs arguments/validated claims, not its return or JWT header.
+    observation = {
+        "boundary": "delegated MCP signature/issuer/audience/tenant/scope validation",
+        "validation": "VALIDATED_AT_MCP_BOUNDARY",
+        "claims": claims,
+        "source": "correlated custom_mcp_auth_validated and custom_mcp_tool console events",
+        "limitation": "JWT header and validity times are NOT_OBSERVED in this server's logs. "
+                      "Full return is captured at APIM and hosted function_call_output, not console.",
+    }
+    outputs = [event for event in run["agentResponse"].get("output", [])
+               if event.get("type") == "function_call_output"]
+    try:
+        hosted_match = len(outputs) == 1 and json.loads(outputs[0]["output"]) == actual_result
+    except (KeyError, ValueError, TypeError):
+        hosted_match = False
+    passed = (
+        selected.get("backendStatus") == 200
+        and run["agentResponse"].get("status") == "completed" and hosted_match
+        and not json.loads(selected["responseBody"]).get("result", {}).get("isError", False)
+        and actual_result.get("marker") == "CUSTOM_MCP_ENTRA_VALIDATED"
+        and claims.get("oid") == caller["oid"]
+        and claims.get("tid") == config["tenantId"]
+        and claims.get("aud") == config["audience"]
+        and claims.get("iss") == f"https://login.microsoftonline.com/{config['tenantId']}/v2.0"
+        and config["scope"] in claims.get("scp", "").split()
+        and claims.get("azp") == config["oauthClientId"]
+    )
+    return [auth[-1], tools[0]], observation, passed
+
+
 def main():
     directory = ROOT / "evidence"
     mcp = json.loads((directory / "observability-mcp-exchanges.json").read_text())
@@ -68,6 +129,15 @@ def main():
         errors = json.dumps(run["agentResponse"])
         matching = [event for event in application
                     if event.get("query", {}).get("experiment_id") == run["experimentId"]]
+        mcp_observation = matching[0]["result"].get("tokenObservation", {}) if matching else {}
+        observed_container = mcp["containers"]["application"].get("observedContainer") if matching else "NOT_OBSERVED"
+        delegated_pass = False
+        if scenario == "c-custom":
+            container = mcp["containers"].get("delegated", {})
+            matching, mcp_observation, delegated_pass = delegated_evidence(
+                run, selected, actual_result, container,
+            )
+            observed_container = container.get("observedContainer") if matching else "NOT_OBSERVED"
         verdict = "UNVERIFIED_MISSING_CORRELATED_APIM_EXCHANGE"
         if selected:
             if "AgentInstanceClientId" in response_text:
@@ -81,7 +151,9 @@ def main():
                   and not response_body["result"].get("isError", False)
                   and not response_body.get("error")):
                 verdict = "PASS_NATIVE_MCP_QUERY_RESULT"
-            elif (scenario.endswith("custom") and matching
+            elif scenario == "c-custom" and delegated_pass:
+                verdict = "PASS_VALIDATED_DELEGATED_MCP_QUERY_RESULT"
+            elif (scenario in ("a-custom", "b-custom") and matching
                   and matching[0].get("result", {}).get("marker") == "CUSTOM_MCP_APPLICATION_VALIDATED"
                   and matching[0]["result"] == actual_result
                   and actual_result["claims"]["oid"] == expected_principals[0 if scenario[0] == "a" else 1]
@@ -108,9 +180,8 @@ def main():
             "hostedAgentSnapshot": hosted_snapshot(run),
             "hostedRuntimeLogQuery": runtime.get(scenario, {"status": "NOT_QUERIED"}),
             "mcpValidatedQueryResultEvents": matching,
-            "observedMcpDestination": (
-                mcp["containers"]["application"]["observedContainer"] if matching else "NOT_OBSERVED"
-            ),
+            "mcpTokenObservation": mcp_observation,
+            "observedMcpDestination": observed_container,
             "searchInternalQueryVisibility": "NOT_OBSERVED",
             "redactions": ["authorization/tokens", "opaque consent URLs", "SDK baggage/session metadata"],
         })
